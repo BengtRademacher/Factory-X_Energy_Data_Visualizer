@@ -44,6 +44,15 @@ def _inject_styles() -> None:
     """Injiziert globale CSS-Styles."""
     style_base64 = _get_base64(_STYLE_PATH)
     
+    # Hintergrundkonfiguration (Blau mit Transparenz)
+    bg_color_hex = "#006DB9"
+    bg_opacity = 0.08
+    
+    # Hex zu RGB Konvertierung für die Nutzung in rgba()
+    h = bg_color_hex.lstrip('#')
+    r, g, b = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+    rgba_bg = f"rgba({r}, {g}, {b}, {bg_opacity})"
+    
     # CSS für das Hintergrund-SVG
     bg_style = ""
     if style_base64:
@@ -70,6 +79,10 @@ def _inject_styles() -> None:
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
 <style>
     {bg_style}
+    /* Haupt-Hintergrundfarbe mit Transparenz */
+    [data-testid="stAppViewContainer"] {{
+        background-color: {rgba_bg} !important;
+    }}
     .material-symbols-rounded {{
         font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
         font-family: 'Material Symbols Rounded';
@@ -168,7 +181,8 @@ class PlottingApp:
         """Rendert den App-Header."""
         st.markdown(
             f"""
-            <div style='display:flex; align-items:center; gap:24px; margin-bottom:1rem;'>
+            <div style='display:flex; align-items:center; gap:16px; margin-bottom:1rem;'>
+                <span class="material-symbols-rounded" style="font-size:54px; color:black;">bolt</span>
                 <span style='font-size:48px; font-weight:700; letter-spacing:0.8px;'>
                     {APP_TITLE}
                 </span>
