@@ -6,6 +6,7 @@ from typing import Tuple
 from app.config import DEFAULT_COLORS, PLOT_DEFAULTS, SANKEY_DEFAULTS
 from app.plotting import plot_sankey_energy_flow
 from app.export import export_plots
+from app.ui.components import render_color_selector
 
 
 def render(processed, options: dict) -> None:
@@ -113,32 +114,28 @@ def render(processed, options: dict) -> None:
 
 
 def _render_sankey_colors(elektrisch: list, pneumatisch: list) -> dict:
-    """Rendert Color-Picker für Sankey-Komponenten."""
+    """Rendert Farbauswahl für Sankey-Komponenten."""
     
     colors = st.session_state.get("sankey_colors", {}).copy()
     
-    # Standardfarben für Gruppen
-    colors.setdefault("Elektrisch", DEFAULT_COLORS[0])
-    colors.setdefault("Pneumatisch", DEFAULT_COLORS[3])
-    
     with st.expander("🎨 Farben", expanded=False):
-        colors["Elektrisch"] = st.color_picker(
+        colors["Elektrisch"] = render_color_selector(
             "Elektrisch (Gruppe)",
-            value=colors.get("Elektrisch", DEFAULT_COLORS[0]),
-            key="sankey_color_elektrisch"
+            "sankey_color_elektrisch",
+            DEFAULT_COLORS[0]
         )
         
-        colors["Pneumatisch"] = st.color_picker(
+        colors["Pneumatisch"] = render_color_selector(
             "Pneumatisch (Gruppe)",
-            value=colors.get("Pneumatisch", DEFAULT_COLORS[3]),
-            key="sankey_color_pneumatisch"
+            "sankey_color_pneumatisch",
+            DEFAULT_COLORS[3]
         )
         
         all_vars = elektrisch + pneumatisch
         for i, var in enumerate(all_vars):
             key = f"sankey_color_{var}"
-            default = colors.get(var, DEFAULT_COLORS[i % len(DEFAULT_COLORS)])
-            colors[var] = st.color_picker(f"{var}", value=default, key=key)
+            default = DEFAULT_COLORS[i % len(DEFAULT_COLORS)]
+            colors[var] = render_color_selector(f"{var}", key, default)
     
     st.session_state["sankey_colors"] = colors
     return colors

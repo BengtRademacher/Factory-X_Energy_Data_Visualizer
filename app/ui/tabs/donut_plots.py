@@ -6,6 +6,7 @@ from typing import Tuple
 from app.config import DEFAULT_COLORS, PLOT_DEFAULTS, DONUT_DEFAULTS
 from app.plotting import plot_donut
 from app.export import export_plots
+from app.ui.components import render_color_selector
 
 
 def render(processed, options: dict) -> None:
@@ -86,8 +87,8 @@ def render(processed, options: dict) -> None:
         # Others-Farbe
         if show_others:
             key = "donut_color_Others"
-            default = st.session_state.get(key, "#888888")
-            colors["Others"] = st.color_picker("Farbe: Others", value=default, key=key)
+            default = "#888888"
+            colors["Others"] = render_color_selector("Farbe: Others", key, default)
     
     with main_col:
         if not components:
@@ -127,7 +128,7 @@ def render(processed, options: dict) -> None:
 
 
 def _render_color_picker(components: list, prefix: str) -> dict:
-    """Rendert Color-Picker für die Komponenten."""
+    """Rendert Farbauswahl für die Komponenten."""
     
     colors = {}
     if not components:
@@ -136,8 +137,8 @@ def _render_color_picker(components: list, prefix: str) -> dict:
     with st.expander("🎨 Farben", expanded=False):
         for i, comp in enumerate(components):
             key = f"{prefix}_color_{comp}"
-            default = st.session_state.get(key, DEFAULT_COLORS[i % len(DEFAULT_COLORS)])
-            colors[comp] = st.color_picker(f"{comp}", value=default, key=key)
+            default = DEFAULT_COLORS[i % len(DEFAULT_COLORS)]
+            colors[comp] = render_color_selector(f"{comp}", key, default)
     
     st.session_state[f"{prefix}_colors"] = colors
     return colors

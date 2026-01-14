@@ -19,6 +19,20 @@ COMBINED_BAR_COLORS = [
     '#F9B31A', '#EF7100', '#E50037', '#8E44AD', '#D35400', '#16A085'
 ]
 
+COLOR_PALETTE = {
+    "FX Blau": "#4B5BA9",
+    "Blau": "#006DB9",
+    "Hellblau": "#007CC5",
+    "Dunkelgrün": "#01A579",
+    "Hellgrün": "#B1CB21",
+    "Gelb": "#F9B31A",
+    "Orange": "#EF7100",
+    "Rot": "#E50037",
+    "Violett": "#8E44AD",
+    "Dunkelorange": "#D35400",
+    "Türkis": "#16A085"
+}
+
 # -----------------------------------------------------------------------------
 # Vordefinierte Variablen (Komponenten)
 # -----------------------------------------------------------------------------
