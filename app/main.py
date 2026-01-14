@@ -46,7 +46,7 @@ def _inject_styles() -> None:
     
     # Hintergrundkonfiguration (Blau mit Transparenz)
     bg_color_hex = "#006DB9"
-    bg_opacity = 0.08
+    bg_opacity = 0.25
     
     # Hex zu RGB Konvertierung für die Nutzung in rgba()
     h = bg_color_hex.lstrip('#')
@@ -79,10 +79,19 @@ def _inject_styles() -> None:
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
 <style>
     {bg_style}
-    /* Haupt-Hintergrundfarbe mit Transparenz */
+    
+    /* --- START BACKGROUND FADE SNIPPET --- */
+    /* Haupt-Hintergrund mit Radial Gradient (Fokus oben links, Rest transparent) */
     [data-testid="stAppViewContainer"] {{
-        background-color: {rgba_bg} !important;
+        background: radial-gradient(
+            circle at top left, 
+            {rgba_bg} 0%, 
+            rgba(255, 255, 255, 0) 70%
+        ) !important;
+        background-attachment: fixed !important;
     }}
+    /* --- END BACKGROUND FADE SNIPPET --- */
+
     .material-symbols-rounded {{
         font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
         font-family: 'Material Symbols Rounded';
