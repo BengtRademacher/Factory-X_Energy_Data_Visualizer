@@ -1,76 +1,88 @@
-# Factory-X_Energy_Data_Visualizer
+<p align="center">
+  <img src="assets/FX_logo_top_left.png" alt="Factory-X Logo" width="300">
+</p>
 
-Eine Streamlit-Anwendung zur Visualisierung und Analyse von Energiedaten.
+# Factory-X Energy Data Visualizer v1.0
 
-## Voraussetzungen
+*Stand: 22. Januar 2026*
 
-- Python 3.11+
-- Abhängigkeiten aus `requirements.txt`
+Der **Factory-X Energy Data Visualizer** ist eine Streamlit-basierte Anwendung zur interaktiven Visualisierung und Analyse von Energiedaten aus Fertigungsprozessen. Sie ermöglicht die schnelle Erstellung publikationsreifer Diagramme aus Maschinen-Messdaten mit umfangreichen Anpassungsmöglichkeiten.
 
-## Installation
+## Kernfunktionen
 
-```bash
-pip install -r requirements.txt
-```
+| Tab | Funktion |
+|-----|----------|
+| **Data Processing** | Import von Excel- und CSV-Dateien, Datenvorschau, Komponenten-Aliasing und Zeitbereichsfilterung. |
+| **Linienplots** | Zeitreihenvisualisierung elektrischer und pneumatischer Leistungsdaten mit optionaler Sekundärachse. |
+| **Säulendiagramme** | Gestapelte oder gruppierte Balkendiagramme mit Mittelwert- oder Summenberechnung und Vergleichsfunktion. |
+| **Boxplots** | Statistische Verteilungsanalysen zur Identifikation von Ausreißern und Streuungen. |
+| **Torten und Donuts** | Anteilsvisualisierung mit konfigurierbarem Sollwert und prozentual oder absoluter Beschriftung. |
+| **Scatter / Histogramm** | Korrelationsanalysen und Verteilungsdarstellungen für tiefere Einblicke in die Messdaten. |
+| **Sankey** | Energieflussdiagramme zur Darstellung von Verbrauchsverteilungen zwischen Komponenten. |
 
-## Starten
+## Demo
 
-```bash
-streamlit run app.py
-```
+Die App ist live verfügbar auf der **Streamlit Community Cloud**:
 
-Die Anwendung öffnet sich automatisch im Browser unter `http://localhost:8501`.
+👉 [**Factory-X Energy Data Visualizer starten**](https://factory-x-energy-data-visualizer.streamlit.app)
+
+## Installation (Lokale Entwicklung)
+
+1. **Repository klonen**:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/Factory-X_Energy_Data_Visualizer.git
+   cd Factory-X_Energy_Data_Visualizer
+   ```
+
+2. **Abhängigkeiten installieren**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Anwendung starten**:
+   ```bash
+   streamlit run app.py
+   ```
+
+   Die Anwendung öffnet sich automatisch im Browser unter `http://localhost:8501`.
 
 ## Projektstruktur
 
 ```
 Factory-X_Energy_Data_Visualizer/
-├── app.py                 # Einstiegspunkt
+├── app.py                 # Einstiegspunkt und Branding
 ├── app/
-│   ├── config.py          # Zentrale Konfiguration
+│   ├── config.py          # Zentrale Konfiguration und Defaults
 │   ├── data_manager.py    # Datenimport und -verwaltung
-│   ├── export.py          # Export-Funktionalität
+│   ├── export.py          # Export-Funktionalität (PDF, PNG)
 │   ├── main.py            # Hauptanwendungslogik
-│   ├── plotting.py        # Plot-Funktionen
+│   ├── plotting.py        # Plot-Erstellungsfunktionen
 │   ├── preprocessor.py    # Datenvorverarbeitung
-│   └── ui/
-│       ├── sidebar.py     # Globale Sidebar
-│       ├── state.py       # Session-State-Management
-│       └── tabs/          # Tab-Module
-│           ├── data_processing.py
-│           ├── line_plots.py
-│           ├── bar_plots.py
-│           ├── box_plots.py
-│           ├── donut_plots.py
-│           ├── scatter_plots.py
-│           ├── histogram_plots.py
-│           └── sankey_plots.py
-├── assets/
-│   ├── FX_logo_top_left.png
-│   └── FX_style_top_right.svg
-├── example_data/          # Beispieldateien
-├── requirements.txt
-└── .gitignore
+│   └── ui/                # UI-Komponenten und Tab-Module
+├── assets/                # Logos und Styling-Assets
+├── example_data/          # Beispieldatensätze
+└── tests/                 # Unit-Tests
 ```
 
-## Features
+## Design und Styling
 
-- **Data Processing**: Datenvorschau, Aliasing, Zeitfilter
-- **Linienplots**: Zeitreihen mit optionaler Sekundärachse
-- **Säulendiagramme**: Gestapelt, mit Vergleichsfunktion
-- **Boxplots**: Statistische Verteilungen
-- **Donut-Diagramme**: Anteile visualisieren
-- **Scatter Plots**: Korrelationen darstellen
-- **Histogramme**: Verteilungsanalysen
-- **Sankey-Diagramme**: Energieflüsse
+Die Anwendung folgt dem **Factory-X Design-Guide**:
+- **Material Design**: Material Symbols Rounded für intuitive Navigation
+- **Responsive Layout**: Optimiert für Wide-Mode mit Drei-Spalten-Layout
+- **Branding**: Factory-X Logos und Farbschema mit transparentem Hintergrund-Gradienten
 
-## Layout
+## Technologie-Stack
 
-- **Linke Sidebar**: Globale Einstellungen (Datenverarbeitung, Darstellung, Export)
-- **Hauptbereich**: Diagramme
-- **Rechte Spalte**: Tab-spezifische Anpassungen (Komponentenauswahl, Farben)
+| Kategorie | Technologie |
+|-----------|-------------|
+| Frontend/Backend | Streamlit |
+| Datenanalyse | Pandas, NumPy |
+| Visualisierung | Plotly, Matplotlib |
+| Export | Kaleido (PDF/PNG) |
+| Tabellenverarbeitung | OpenPyXL |
 
-## Hinweise
+---
 
-- Export von Plotly-Diagrammen als PDF benötigt `kaleido`
-- Theme kann in `.streamlit/config.toml` angepasst werden
+<p align="center">
+  <i>Entwickelt im Rahmen des Factory-X Projekts zur Steigerung der Energieeffizienz in der Produktion.</i>
+</p>
