@@ -1,7 +1,6 @@
 """Sankey tab for the Factory-X plotting app."""
 
 import inspect
-from typing import Tuple
 
 import streamlit as st
 
@@ -9,6 +8,7 @@ from app.config import DEFAULT_COLORS, PLOT_DEFAULTS
 from app.export import export_plots
 from app.plotting import plot_sankey_energy_flow
 from app.ui.components import ColorTarget, build_color_targets, get_valid_multiselect_state, render_component_color_section
+from app.ui.tab_utils import ensure_has_data, ensure_valid_ranges, figure_size_from_options
 
 
 def _plotly_chart_kwargs() -> dict:
@@ -26,12 +26,10 @@ def _plotly_chart_kwargs() -> dict:
 
 def render(processed, options: dict) -> None:
     """Render the Sankey tab."""
-    if not processed.has_data:
-        st.info("Please upload files to create charts.")
+    if not ensure_has_data(processed, "Please upload files to create charts."):
         return
 
-    if not options.get("ranges_valid", True):
-        st.warning("Invalid axis ranges.")
+    if not ensure_valid_ranges(options):
         return
 
     main_col, custom_col = st.columns([4, 1])
@@ -87,11 +85,12 @@ def render(processed, options: dict) -> None:
             selected_electric=electric,
             selected_pneumatic=pneumatic,
             productive_vars=productive,
-            figsize=_figure_size(options),
+            figsize=figure_size_from_options(options),
             axis_fontsize=options.get("axis_annotation_fontsize", PLOT_DEFAULTS.axis_fontsize),
             title=title,
             colors=colors,
             unit=unit,
+            component_means=processed.overall_numeric_means,
         )
 
         if fig is None:
@@ -106,10 +105,3 @@ def render(processed, options: dict) -> None:
                 options.get("export_filename", "export"),
                 options.get("export_format"),
             )
-
-
-def _figure_size(options: dict) -> Tuple[float, float]:
-    """Calculate figure size from sidebar options (mm -> inches)."""
-    width_mm = float(options.get("plot_width", PLOT_DEFAULTS.width))
-    height_mm = float(options.get("plot_height", PLOT_DEFAULTS.height))
-    return (width_mm / 25.4, height_mm / 25.4)

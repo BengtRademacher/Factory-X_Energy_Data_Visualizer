@@ -4,19 +4,10 @@ from __future__ import annotations
 
 import streamlit as st
 
-from app.config import APP_TITLE, TAB_SPECS
-from app.data_manager import DataManager
+from app.config import APP_TITLE
+from app.data_manager import DataManager, LoadDiagnostic
 from app.ui.sidebar import render_sidebar
-from app.ui.tabs import (
-    bar_plots,
-    box_plots,
-    data_processing,
-    donut_plots,
-    histogram_plots,
-    line_plots,
-    sankey_plots,
-    scatter_plots,
-)
+from app.ui.tabs import TAB_BY_TITLE, TAB_REGISTRY
 
 
 class PlottingApp:
@@ -50,8 +41,10 @@ class PlottingApp:
             st.session_state["files_imported_toast_shown"] = True
 
         processed = self.data_manager.load_files(uploaded_files or [])
+        self._render_diagnostics(processed.diagnostics)
         sidebar_options = render_sidebar(processed)
-        self._render_tabs(processed, sidebar_options)
+        self._render_tab_selector()
+        self._render_active_tab(processed, sidebar_options)
 
     def _render_header(self) -> None:
         """Render the app header."""
@@ -67,23 +60,40 @@ class PlottingApp:
             unsafe_allow_html=True,
         )
 
-    def _render_tabs(self, processed, options: dict) -> None:
-        """Render all application tabs."""
-        tabs = st.tabs([tab.label for tab in TAB_SPECS])
-        tab_modules = [
-            data_processing,
-            line_plots,
-            bar_plots,
-            box_plots,
-            donut_plots,
-            scatter_plots,
-            histogram_plots,
-            sankey_plots,
-        ]
+    def _render_tab_selector(self) -> None:
+        """Render a single active-tab selector to avoid eager tab rendering."""
+        available_titles = [tab.title for tab in TAB_REGISTRY]
+        current = st.session_state.get("active_tab_name")
+        if current not in available_titles:
+            st.session_state["active_tab_name"] = available_titles[0]
 
-        for tab, module in zip(tabs, tab_modules):
-            with tab:
-                module.render(processed, options)
+        st.segmented_control(
+            "Section",
+            options=available_titles,
+            key="active_tab_name",
+            label_visibility="collapsed",
+            format_func=lambda title: TAB_BY_TITLE[title].label,
+            selection_mode="single",
+            width="stretch",
+        )
+
+    def _render_active_tab(self, processed, options: dict) -> None:
+        """Render only the selected tab."""
+        active_title = st.session_state.get("active_tab_name")
+        tab_definition = TAB_BY_TITLE.get(active_title) or TAB_REGISTRY[0]
+        tab_definition.module.render(processed, options)
+
+    def _render_diagnostics(self, diagnostics: list[LoadDiagnostic]) -> None:
+        """Display diagnostics from the data pipeline."""
+        for diagnostic in diagnostics:
+            message = diagnostic.message
+            if diagnostic.file_name:
+                message = f"{message} ({diagnostic.file_name})"
+
+            if diagnostic.level == "info":
+                st.info(message)
+            else:
+                st.warning(message)
 
 
 def run_app() -> None:

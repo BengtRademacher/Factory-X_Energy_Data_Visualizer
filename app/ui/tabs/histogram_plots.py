@@ -1,25 +1,29 @@
 """Histogram tab for the Factory-X plotting app."""
 
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 
 from app.config import DEFAULT_COLORS, PLOT_DEFAULTS
-from app.export import export_plots
 from app.plotting import plot_histogram
 from app.ui.components import build_color_targets, get_valid_multiselect_state, render_component_color_section
+from app.ui.tab_utils import (
+    ensure_has_data,
+    ensure_valid_ranges,
+    figure_size_from_options,
+    finalize_matplotlib_figures,
+    render_matplotlib_figure,
+)
 
 
 def render(processed, options: dict) -> None:
     """Render the Histogram tab."""
-    if not processed.has_data:
-        st.info("Please upload files to create charts.")
+    if not ensure_has_data(processed, "Please upload files to create charts."):
         return
 
-    if not options.get("ranges_valid", True):
-        st.warning("Invalid axis ranges.")
+    if not ensure_valid_ranges(options):
         return
 
     main_col, custom_col = st.columns([4, 1])
@@ -47,7 +51,7 @@ def render(processed, options: dict) -> None:
             st.info("Please select at least one component.")
             return
 
-        plots_to_export: List[Tuple[str, object]] = []
+        plots_to_export: List[tuple[str, object]] = []
         combined_df = processed.combined_frame
         xlim = (options.get("x_min"), options.get("x_max")) if options.get("set_x_range") else None
         ylim = (options.get("y_min"), options.get("y_max")) if options.get("set_y_range") else None
@@ -70,7 +74,7 @@ def render(processed, options: dict) -> None:
             fig = plot_histogram(
                 series=series,
                 title=f"Histogram - {comp}",
-                figsize=_figure_size(options),
+                figsize=figure_size_from_options(options),
                 axis_fontsize=options.get("axis_annotation_fontsize", PLOT_DEFAULTS.axis_fontsize),
                 axis_title_fontsize=options.get("axis_title_fontsize", PLOT_DEFAULTS.axis_title_fontsize),
                 bins=bins,
@@ -88,22 +92,7 @@ def render(processed, options: dict) -> None:
             )
 
             if fig is not None:
-                st.pyplot(fig, width="stretch")
+                render_matplotlib_figure(fig)
                 plots_to_export.append((f"Histogram - {comp}", fig))
-                import matplotlib.pyplot as plt
 
-                plt.close(fig)
-
-        if options.get("export_trigger") and options.get("export_format") and plots_to_export:
-            export_plots(
-                plots_to_export,
-                options.get("export_filename", "export"),
-                options.get("export_format"),
-            )
-
-
-def _figure_size(options: dict) -> Tuple[float, float]:
-    """Calculate figure size from sidebar options (mm -> inches)."""
-    width_mm = float(options.get("plot_width", PLOT_DEFAULTS.width))
-    height_mm = float(options.get("plot_height", PLOT_DEFAULTS.height))
-    return (width_mm / 25.4, height_mm / 25.4)
+        finalize_matplotlib_figures(plots_to_export, options)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from html import escape
 import re
 
 import streamlit as st
@@ -97,6 +98,58 @@ def render_component_color_section(
 
     st.session_state[storage_key] = section_colors
     return section_colors
+
+
+def render_panel_header(
+    title: str,
+    description: str | None = None,
+    *,
+    eyebrow: str | None = None,
+    metrics: list[tuple[str, object]] | None = None,
+) -> None:
+    """Render a stylized section header with optional KPI chips."""
+    title_html = escape(title)
+    description_html = (
+        f'<p class="fx-panel-copy">{escape(description)}</p>'
+        if description
+        else ""
+    )
+    eyebrow_html = f'<div class="fx-panel-eyebrow">{escape(eyebrow)}</div>' if eyebrow else ""
+    metrics_html = _build_metric_chips_markup(metrics)
+
+    st.markdown(
+        (
+            '<div class="fx-panel-header">'
+            f"{eyebrow_html}"
+            f'<div class="fx-panel-title">{title_html}</div>'
+            f"{description_html}"
+            f"{metrics_html}"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def render_group_intro(
+    title: str,
+    description: str,
+    *,
+    variant: str = "default",
+) -> None:
+    """Render a compact intro block for grouped controls."""
+    class_name = "fx-sidebar-group"
+    if variant == "advanced":
+        class_name += " fx-sidebar-group--advanced"
+
+    st.markdown(
+        (
+            f'<div class="{class_name}">'
+            f'<div class="fx-sidebar-group-title">{escape(title)}</div>'
+            f'<p class="fx-sidebar-group-copy">{escape(description)}</p>'
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 def render_color_selector(
@@ -227,3 +280,25 @@ def _normalize_hex_color(color: str | None, fallback: str) -> str:
 def _sanitize_html_attr(value: str) -> str:
     """Normalize arbitrary ids for HTML attribute usage."""
     return re.sub(r"[^a-zA-Z0-9_-]+", "-", value)
+
+
+def _build_metric_chips_markup(metrics: list[tuple[str, object]] | None) -> str:
+    """Build HTML for one KPI chip row."""
+    if not metrics:
+        return ""
+
+    chips: list[str] = []
+    for label, value in metrics:
+        if value is None or value == "":
+            continue
+        chips.append(
+            '<span class="fx-kpi-chip">'
+            f'<span class="fx-kpi-chip__label">{escape(str(label))}</span>'
+            f'<span class="fx-kpi-chip__value">{escape(str(value))}</span>'
+            "</span>"
+        )
+
+    if not chips:
+        return ""
+
+    return f'<div class="fx-kpi-row">{"".join(chips)}</div>'

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pandas as pd
@@ -10,9 +11,11 @@ import streamlit as st
 
 from app.config import TAB_SPECS
 from app.data_manager import ProcessedData
+from app.main import PlottingApp
 from app.ui import sidebar as sidebar_module
 from app.ui.sidebar import render_sidebar
 from app.ui.state import initialize_state, reset_ui_state
+from app.ui.tab_utils import get_cached_processed_x_axis
 
 
 @patch("streamlit.sidebar")
@@ -169,3 +172,48 @@ def test_display_section_uses_blank_ranges_for_auto(monkeypatch):
     assert recorded["expanders"] == ["Display", "Set X Range", "Set Y Range"]
     assert st.session_state["set_x_range"] is False
     assert st.session_state["set_y_range"] is True
+
+
+def test_plotting_app_renders_only_active_tab(monkeypatch):
+    rendered: list[str] = []
+    st.session_state.clear()
+
+    class DummyTab:
+        def __init__(self, name):
+            self.name = name
+
+        def render(self, processed, options):
+            rendered.append(self.name)
+
+    monkeypatch.setattr("app.main.TAB_BY_TITLE", {"Line Plots": SimpleNamespace(module=DummyTab("line"))})
+    st.session_state["active_tab_name"] = "Line Plots"
+
+    PlottingApp()._render_active_tab(
+        ProcessedData(pd.DataFrame({"elapsedTime": [0]}), [], {}),
+        {"ranges_valid": True},
+    )
+
+    assert rendered == ["line"]
+
+
+def test_cached_processed_x_axis_reuses_session_entry(monkeypatch):
+    processed = ProcessedData(
+        combined_frame=pd.DataFrame({"x": [0, 1], "y": [2, 3]}),
+        file_boundaries=[],
+        frames_by_file={"a.csv": pd.DataFrame({"x": [0, 1], "y": [2, 3]})},
+        upload_signature=("demo",),
+    )
+    calls = {"count": 0}
+
+    def fake_resolve(*args, **kwargs):
+        calls["count"] += 1
+        return SimpleNamespace(error=None, values=pd.Series([0.0, 1.0]), file_boundaries=[], max_value=1.0)
+
+    monkeypatch.setattr("app.ui.tab_utils.resolve_processed_x_axis", fake_resolve)
+    st.session_state.clear()
+
+    first = get_cached_processed_x_axis(processed, "x")
+    second = get_cached_processed_x_axis(processed, "x")
+
+    assert first is second
+    assert calls["count"] == 1

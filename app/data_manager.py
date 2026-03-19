@@ -2,13 +2,34 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from hashlib import sha256
+from io import BytesIO
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 from pandas.errors import EmptyDataError, ParserError
+
+
+@dataclass(frozen=True, slots=True)
+class LoadDiagnostic:
+    """Represents one informational or warning message from the load pipeline."""
+
+    level: str
+    message: str
+    file_name: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UploadPayload:
+    """Serializable upload payload used by the cached processing core."""
+
+    name: str
+    size: int
+    content: bytes
+    signature: str
 
 
 @dataclass(slots=True)
@@ -18,10 +39,45 @@ class ProcessedData:
     combined_frame: pd.DataFrame
     file_boundaries: List[Tuple[str, pd.Timedelta]]
     frames_by_file: Dict[str, pd.DataFrame]
+    upload_signature: Tuple[str, ...] = ()
+    available_columns: List[str] = field(default_factory=list)
+    numeric_columns: List[str] = field(default_factory=list)
+    diagnostics: List[LoadDiagnostic] = field(default_factory=list)
+    per_file_numeric_means: pd.DataFrame = field(default_factory=pd.DataFrame)
+    overall_numeric_means: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
+    interval_means_by_file: Dict[str, pd.DataFrame] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.available_columns and self.combined_frame is not None and not self.combined_frame.empty:
+            self.available_columns = [
+                column for column in self.combined_frame.columns
+                if column != DataManager.elapsed_column
+            ]
+
+        if not self.numeric_columns and self.combined_frame is not None and not self.combined_frame.empty:
+            self.numeric_columns = [
+                column for column in self.available_columns
+                if column in self.combined_frame.columns and pd.api.types.is_numeric_dtype(self.combined_frame[column])
+            ]
 
     @property
     def has_data(self) -> bool:
         return self.combined_frame is not None and not self.combined_frame.empty
+
+
+def _empty_processed_data(upload_signature: Tuple[str, ...] = ()) -> ProcessedData:
+    return ProcessedData(
+        combined_frame=pd.DataFrame(),
+        file_boundaries=[],
+        frames_by_file={},
+        upload_signature=upload_signature,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _load_payloads_cached(payloads: Tuple[UploadPayload, ...]) -> ProcessedData:
+    """Cache the expensive read/normalize path for unchanged uploads."""
+    return DataManager._load_payloads_core(payloads)
 
 
 class DataManager:
@@ -30,33 +86,49 @@ class DataManager:
     elapsed_column = "elapsedTime"
 
     def load_files(self, uploaded_files: Sequence) -> ProcessedData:
-        """Load all uploaded files and merge them into one processed payload."""
-        if not uploaded_files:
-            return ProcessedData(pd.DataFrame(), [], {})
+        """Load uploaded files and merge them into one processed payload."""
+        payloads = self._build_payloads(uploaded_files)
+        if not payloads:
+            return _empty_processed_data()
+        return _load_payloads_cached(payloads)
+
+    @classmethod
+    def _load_payloads_core(cls, payloads: Tuple[UploadPayload, ...]) -> ProcessedData:
+        if not payloads:
+            return _empty_processed_data()
 
         all_frames: List[pd.DataFrame] = []
         file_boundaries: List[Tuple[str, pd.Timedelta]] = []
         frames_by_file: Dict[str, pd.DataFrame] = {}
+        diagnostics: List[LoadDiagnostic] = []
         offset = pd.Timedelta(seconds=0)
 
-        for uploaded in uploaded_files:
-            frame = self._read_file(uploaded)
+        for payload in payloads:
+            frame, read_diagnostics = cls._read_payload(payload)
+            diagnostics.extend(read_diagnostics)
             if frame is None or frame.empty:
-                st.warning(f"File '{uploaded.name}' could not be read.")
-                continue
-
-            frame = self.ensure_elapsed_time(frame, uploaded.name)
-            if frame.empty:
-                st.warning(
-                    f"File '{uploaded.name}' does not contain usable time information and will be skipped."
+                diagnostics.append(
+                    LoadDiagnostic("warning", "File could not be read.", file_name=payload.name)
                 )
                 continue
 
-            frame[self.elapsed_column] = frame[self.elapsed_column] + offset
-            frame.set_index(self.elapsed_column, inplace=True)
+            frame, elapsed_diagnostics = cls._ensure_elapsed_time_with_diagnostics(frame, payload.name)
+            diagnostics.extend(elapsed_diagnostics)
+            if frame.empty:
+                diagnostics.append(
+                    LoadDiagnostic(
+                        "warning",
+                        "File does not contain usable time information and was skipped.",
+                        file_name=payload.name,
+                    )
+                )
+                continue
 
-            file_boundaries.append((uploaded.name, frame.index[0]))
-            frames_by_file[uploaded.name] = frame
+            frame[cls.elapsed_column] = frame[cls.elapsed_column] + offset
+            frame.set_index(cls.elapsed_column, inplace=True)
+
+            file_boundaries.append((payload.name, frame.index[0]))
+            frames_by_file[payload.name] = frame
             all_frames.append(frame.reset_index())
 
             offset = frame.index[-1]
@@ -66,26 +138,102 @@ class DataManager:
                     offset += step
 
         combined = pd.concat(all_frames, ignore_index=True) if all_frames else pd.DataFrame()
-        return ProcessedData(combined, file_boundaries, frames_by_file)
+        upload_signature = tuple(f"{payload.name}:{payload.size}:{payload.signature}" for payload in payloads)
+        available_columns = [
+            column for column in combined.columns
+            if column != cls.elapsed_column
+        ]
+        numeric_columns = [
+            column for column in available_columns
+            if column in combined.columns and pd.api.types.is_numeric_dtype(combined[column])
+        ]
+
+        per_file_numeric_means = cls._compute_per_file_numeric_means(frames_by_file, numeric_columns)
+        overall_numeric_means = cls._compute_overall_numeric_means(combined, numeric_columns)
+        interval_means_by_file = cls._compute_interval_means_by_file(frames_by_file, numeric_columns)
+
+        return ProcessedData(
+            combined_frame=combined,
+            file_boundaries=file_boundaries,
+            frames_by_file=frames_by_file,
+            upload_signature=upload_signature,
+            available_columns=available_columns,
+            numeric_columns=numeric_columns,
+            diagnostics=diagnostics,
+            per_file_numeric_means=per_file_numeric_means,
+            overall_numeric_means=overall_numeric_means,
+            interval_means_by_file=interval_means_by_file,
+        )
+
+    @classmethod
+    def _build_payloads(cls, uploaded_files: Sequence) -> Tuple[UploadPayload, ...]:
+        payloads: List[UploadPayload] = []
+        for uploaded_file in uploaded_files:
+            content = cls._read_uploaded_bytes(uploaded_file)
+            if content is None:
+                continue
+
+            name = getattr(uploaded_file, "name", "Unknown file")
+            payloads.append(
+                UploadPayload(
+                    name=name,
+                    size=len(content),
+                    content=content,
+                    signature=sha256(content).hexdigest(),
+                )
+            )
+        return tuple(payloads)
+
+    @staticmethod
+    def _read_uploaded_bytes(uploaded_file) -> bytes | None:
+        if uploaded_file is None:
+            return None
+
+        if hasattr(uploaded_file, "getvalue"):
+            content = uploaded_file.getvalue()
+        elif hasattr(uploaded_file, "read"):
+            content = uploaded_file.read()
+        else:
+            return None
+
+        if hasattr(uploaded_file, "seek"):
+            uploaded_file.seek(0)
+        return content
 
     def ensure_elapsed_time(self, frame: pd.DataFrame, file_name: str | None = None) -> pd.DataFrame:
         """Ensure that the frame contains a normalized elapsed time column."""
-        if self.elapsed_column in frame.columns:
-            return self._normalize_elapsed_series(frame)
+        normalized, _ = self._ensure_elapsed_time_with_diagnostics(frame, file_name)
+        return normalized
 
-        elapsed = self._from_datetime_columns(frame)
+    @classmethod
+    def _ensure_elapsed_time_with_diagnostics(
+        cls,
+        frame: pd.DataFrame,
+        file_name: str | None = None,
+    ) -> tuple[pd.DataFrame, list[LoadDiagnostic]]:
+        diagnostics: list[LoadDiagnostic] = []
+        if cls.elapsed_column in frame.columns:
+            return cls._normalize_elapsed_series(frame), diagnostics
+
+        elapsed = cls._from_datetime_columns(frame)
         if elapsed is not None:
-            frame[self.elapsed_column] = elapsed
-            return self._normalize_elapsed_series(frame)
+            frame[cls.elapsed_column] = elapsed
+            return cls._normalize_elapsed_series(frame), diagnostics
 
-        elapsed = self._from_numeric_columns(frame)
+        elapsed = cls._from_numeric_columns(frame)
         if elapsed is not None:
-            frame[self.elapsed_column] = elapsed
-            return self._normalize_elapsed_series(frame)
+            frame[cls.elapsed_column] = elapsed
+            return cls._normalize_elapsed_series(frame), diagnostics
 
-        frame[self.elapsed_column] = pd.to_timedelta(np.arange(len(frame)), unit="s")
-        st.info(f"Derived time from the row index (1 s step) for '{file_name or 'file'}'.")
-        return frame
+        frame[cls.elapsed_column] = pd.to_timedelta(np.arange(len(frame)), unit="s")
+        diagnostics.append(
+            LoadDiagnostic(
+                "info",
+                "Derived time from the row index (1 s step).",
+                file_name=file_name or "file",
+            )
+        )
+        return frame, diagnostics
 
     def sum_categories(
         self,
@@ -134,39 +282,60 @@ class DataManager:
         return pd.DataFrame(result).fillna(0)
 
     @staticmethod
-    def _read_file(uploaded_file) -> Optional[pd.DataFrame]:
-        """Read one uploaded CSV or Excel file."""
-        name = getattr(uploaded_file, "name", "Unknown file")
+    def _read_payload(payload: UploadPayload) -> tuple[pd.DataFrame | None, list[LoadDiagnostic]]:
+        """Read one cached CSV or Excel payload."""
+        diagnostics: list[LoadDiagnostic] = []
         try:
-            lowered = name.lower()
+            lowered = payload.name.lower()
+            buffer = BytesIO(payload.content)
             if lowered.endswith(".csv"):
-                return pd.read_csv(uploaded_file, sep=None, engine="python")
-            return pd.read_excel(uploaded_file)
+                return pd.read_csv(buffer, sep=None, engine="python"), diagnostics
+            return pd.read_excel(buffer), diagnostics
         except (ParserError, EmptyDataError) as exc:
-            st.warning(f"File '{name}' could not be parsed: {exc}. Please check the file format.")
+            diagnostics.append(
+                LoadDiagnostic(
+                    "warning",
+                    f"File could not be parsed: {exc}. Please check the file format.",
+                    file_name=payload.name,
+                )
+            )
         except ValueError as exc:
-            st.warning(f"File '{name}' contains invalid values and was skipped ({exc}).")
+            diagnostics.append(
+                LoadDiagnostic(
+                    "warning",
+                    f"File contains invalid values and was skipped ({exc}).",
+                    file_name=payload.name,
+                )
+            )
         except Exception as exc:
-            st.warning(f"An unexpected error occurred while loading '{name}': {exc}.")
-        return None
+            diagnostics.append(
+                LoadDiagnostic(
+                    "warning",
+                    f"An unexpected error occurred while loading the file: {exc}.",
+                    file_name=payload.name,
+                )
+            )
+        return None, diagnostics
 
-    def _normalize_elapsed_series(self, frame: pd.DataFrame) -> pd.DataFrame:
+    @classmethod
+    def _normalize_elapsed_series(cls, frame: pd.DataFrame) -> pd.DataFrame:
         """Normalize the elapsed time series to timedeltas starting at zero."""
-        series = frame[self.elapsed_column]
+        series = frame[cls.elapsed_column]
         if not pd.api.types.is_timedelta64_dtype(series):
             if pd.api.types.is_numeric_dtype(series):
-                frame[self.elapsed_column] = pd.to_timedelta(series, unit="s", errors="coerce")
+                frame[cls.elapsed_column] = pd.to_timedelta(series, unit="s", errors="coerce")
             else:
-                frame[self.elapsed_column] = pd.to_timedelta(series.astype(str), errors="coerce")
+                frame[cls.elapsed_column] = pd.to_timedelta(series.astype(str), errors="coerce")
 
-        frame.dropna(subset=[self.elapsed_column], inplace=True)
+        frame.dropna(subset=[cls.elapsed_column], inplace=True)
         if frame.empty:
             return frame
 
-        frame[self.elapsed_column] = frame[self.elapsed_column] - frame[self.elapsed_column].iloc[0]
+        frame[cls.elapsed_column] = frame[cls.elapsed_column] - frame[cls.elapsed_column].iloc[0]
         return frame
 
-    def _from_datetime_columns(self, frame: pd.DataFrame) -> Optional[pd.Series]:
+    @staticmethod
+    def _from_datetime_columns(frame: pd.DataFrame) -> Optional[pd.Series]:
         """Try to derive elapsed time from datetime-like columns."""
         best_parsed: Optional[pd.Series] = None
         best_ratio = 0.0
@@ -175,6 +344,10 @@ class DataManager:
             series = frame[col]
             if pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_datetime64_any_dtype(series):
                 continue
+            if not pd.api.types.is_datetime64_any_dtype(series):
+                string_values = series.astype(str)
+                if float(string_values.str.contains(r"\d", regex=True).mean()) < 0.6:
+                    continue
             parsed = series if pd.api.types.is_datetime64_any_dtype(series) else pd.to_datetime(
                 series,
                 errors="coerce",
@@ -196,7 +369,8 @@ class DataManager:
         elapsed = parsed - parsed.iloc[0]
         return pd.to_timedelta(elapsed)
 
-    def _from_numeric_columns(self, frame: pd.DataFrame) -> Optional[pd.Series]:
+    @staticmethod
+    def _from_numeric_columns(frame: pd.DataFrame) -> Optional[pd.Series]:
         """Try to derive elapsed time from numeric columns."""
         numeric_cols = [col for col in frame.columns if pd.api.types.is_numeric_dtype(frame[col])]
         candidates: List[str] = []
@@ -231,10 +405,44 @@ class DataManager:
             reverse=True,
         )
         selected = candidates[0]
-        if not any(keyword in selected.lower() for keyword in ["time", "zeit"]):
-            st.warning(
-                f"Selected time column '{selected}' does not contain a 'time/zeit' keyword. Please verify the mapping."
-            )
         unit = _unit_from_name(selected)
         elapsed = pd.to_timedelta(pd.to_numeric(frame[selected], errors="coerce"), unit=unit, errors="coerce")
         return elapsed
+
+    @staticmethod
+    def _compute_per_file_numeric_means(
+        frames_by_file: Dict[str, pd.DataFrame],
+        numeric_columns: Sequence[str],
+    ) -> pd.DataFrame:
+        rows: dict[str, pd.Series] = {}
+        for file_name, frame in frames_by_file.items():
+            available = [column for column in numeric_columns if column in frame.columns]
+            if not available:
+                rows[file_name] = pd.Series(dtype=float)
+                continue
+            rows[file_name] = frame[available].apply(pd.to_numeric, errors="coerce").mean(axis=0)
+        return pd.DataFrame.from_dict(rows, orient="index")
+
+    @staticmethod
+    def _compute_overall_numeric_means(
+        combined_frame: pd.DataFrame,
+        numeric_columns: Sequence[str],
+    ) -> pd.Series:
+        if combined_frame.empty or not numeric_columns:
+            return pd.Series(dtype=float)
+        return combined_frame[list(numeric_columns)].apply(pd.to_numeric, errors="coerce").mean(axis=0)
+
+    @staticmethod
+    def _compute_interval_means_by_file(
+        frames_by_file: Dict[str, pd.DataFrame],
+        numeric_columns: Sequence[str],
+    ) -> Dict[str, pd.DataFrame]:
+        interval_means: Dict[str, pd.DataFrame] = {}
+        for file_name, frame in frames_by_file.items():
+            available = [column for column in numeric_columns if column in frame.columns]
+            if not available:
+                interval_means[file_name] = pd.DataFrame(index=frame.index.unique())
+                continue
+            numeric_frame = frame[available].apply(pd.to_numeric, errors="coerce")
+            interval_means[file_name] = numeric_frame.groupby(level=0).mean()
+        return interval_means

@@ -4,8 +4,9 @@ import pandas as pd
 import streamlit as st
 
 from app.config import EXPORT_DEFAULTS, PLOT_DEFAULTS
+from app.ui.components import render_group_intro
 from app.ui.state import reset_ui_state
-from app.x_axis import resolve_processed_x_axis
+from app.ui.tab_utils import get_cached_processed_x_axis
 
 
 def render_sidebar(processed) -> dict:
@@ -21,16 +22,13 @@ def render_sidebar(processed) -> dict:
 
     if combined_df is not None and not combined_df.empty:
         x_source_columns = combined_df.columns.tolist()
-        all_available_columns = [col for col in combined_df.columns if col != "elapsedTime"]
-        numeric_plot_columns = [
-            col for col in combined_df.columns
-            if col != "elapsedTime" and pd.api.types.is_numeric_dtype(combined_df[col])
-        ]
+        all_available_columns = list(processed.available_columns)
+        numeric_plot_columns = list(processed.numeric_columns)
         if numeric_plot_columns:
             y_max_default = float(combined_df[numeric_plot_columns].max().max())
 
     x_source_column = _sync_x_source_state(x_source_columns)
-    x_resolution = resolve_processed_x_axis(processed, x_source_column)
+    x_resolution = get_cached_processed_x_axis(processed, x_source_column)
     if x_resolution.error is None and x_resolution.max_value is not None:
         x_max_default = float(x_resolution.max_value)
 
@@ -80,86 +78,99 @@ def _render_display_section(
         expanded=st.session_state.get("expander_display", False),
         icon=":material/palette:",
     ):
-        if x_source_columns:
-            current_x_source = st.session_state.get("x_source_column")
-            x_source_index = x_source_columns.index(current_x_source) if current_x_source in x_source_columns else 0
-            st.selectbox(
-                "X Source",
-                options=x_source_columns,
-                index=x_source_index,
-                key="x_source_column_select",
-                on_change=_handle_x_source_change,
+        with st.container(border=True):
+            render_group_intro(
+                "Basis",
+                "Frequently used chart defaults shared across the plotting tabs.",
             )
-            st.session_state["x_source_column"] = st.session_state.get("x_source_column_select")
-            if st.session_state.get("x_source_auto_selected"):
-                st.warning(f'Column "{st.session_state["x_source_column"]}" was automatically selected as the X source.')
-            elif x_source_error:
-                st.warning(x_source_error)
-        else:
-            st.session_state["x_source_column"] = None
-            st.session_state["x_source_auto_selected"] = False
-            if x_source_error:
-                st.info(x_source_error)
+            if x_source_columns:
+                current_x_source = st.session_state.get("x_source_column")
+                x_source_index = x_source_columns.index(current_x_source) if current_x_source in x_source_columns else 0
+                st.selectbox(
+                    "X Source",
+                    options=x_source_columns,
+                    index=x_source_index,
+                    key="x_source_column_select",
+                    on_change=_handle_x_source_change,
+                )
+                st.session_state["x_source_column"] = st.session_state.get("x_source_column_select")
+                if st.session_state.get("x_source_auto_selected"):
+                    st.warning(f'Column "{st.session_state["x_source_column"]}" was automatically selected as the X source.')
+                elif x_source_error:
+                    st.warning(x_source_error)
+            else:
+                st.session_state["x_source_column"] = None
+                st.session_state["x_source_auto_selected"] = False
+                if x_source_error:
+                    st.info(x_source_error)
 
-        st.caption("Formatting")
-        st.slider("Width (mm)", min_value=100, max_value=500, step=5, key="plot_width")
-        st.slider("Height (mm)", min_value=50, max_value=400, step=5, key="plot_height")
-        st.slider("Tick Font Size", min_value=8, max_value=30, step=1, key="axis_annotation_fontsize")
-        st.slider("Axis Font Size", min_value=8, max_value=40, step=1, key="axis_title_fontsize")
-        st.slider("Line Width", min_value=0.1, max_value=4.0, step=0.05, key="line_width")
-
-        st.divider()
-        st.caption("Labels")
-        st.text_input("X Axis", key="x_axis_label")
-        st.text_input("Y Axis", key="y_axis_label")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.text_input("X Unit", key="x_unit")
-        with col2:
-            st.text_input("Y Unit", key="y_unit")
+            st.slider("Width (mm)", min_value=100, max_value=500, step=5, key="plot_width")
+            st.slider("Height (mm)", min_value=50, max_value=400, step=5, key="plot_height")
+            st.slider("Tick Font Size", min_value=8, max_value=30, step=1, key="axis_annotation_fontsize")
+            st.slider("Axis Font Size", min_value=8, max_value=40, step=1, key="axis_title_fontsize")
+            st.slider("Line Width", min_value=0.1, max_value=4.0, step=0.05, key="line_width")
 
         st.divider()
-        st.caption("Ranges")
+        with st.container(border=True):
+            render_group_intro(
+                "Labeling",
+                "Shared axis labels and units used by most chart views.",
+            )
+            st.text_input("X Axis", key="x_axis_label")
+            st.text_input("Y Axis", key="y_axis_label")
 
-        x_active, x_range_valid = _render_range_expander(
-            title="Set X Range",
-            axis_key="x",
-            min_label="X Min",
-            max_label="X Max",
-            default_min=0.0,
-            default_max=x_max_default,
-        )
-        st.session_state["set_x_range"] = x_active
-        ranges_valid = ranges_valid and x_range_valid
+            col1, col2 = st.columns(2)
+            with col1:
+                st.text_input("X Unit", key="x_unit")
+            with col2:
+                st.text_input("Y Unit", key="y_unit")
 
-        y_active, y_range_valid = _render_range_expander(
-            title="Set Y Range",
-            axis_key="y",
-            min_label="Y Min",
-            max_label="Y Max",
-            default_min=0.0,
-            default_max=y_max_default,
-        )
-        st.session_state["set_y_range"] = y_active
-        ranges_valid = ranges_valid and y_range_valid
+        st.divider()
+        with st.container(border=True):
+            render_group_intro(
+                "Scaling",
+                "Keep automatic scaling for speed or define manual ranges and tick intervals when you need publication-style control.",
+                variant="advanced",
+            )
 
-        col1, col2 = st.columns(2)
-        x_step = col1.text_input(
-            "X Tick Step",
-            value=str(st.session_state.get("x_tick_step", PLOT_DEFAULTS.x_tick_step)),
-            key="x_tick_step_ui",
-        )
-        y_step = col2.text_input(
-            "Y Tick Step",
-            value=str(st.session_state.get("y_tick_step", PLOT_DEFAULTS.y_tick_step)),
-            key="y_tick_step_ui",
-        )
-        try:
-            st.session_state["x_tick_step"] = float(x_step.replace(",", "."))
-            st.session_state["y_tick_step"] = float(y_step.replace(",", "."))
-        except ValueError:
-            pass
+            x_active, x_range_valid = _render_range_expander(
+                title="Set X Range",
+                axis_key="x",
+                min_label="X Min",
+                max_label="X Max",
+                default_min=0.0,
+                default_max=x_max_default,
+            )
+            st.session_state["set_x_range"] = x_active
+            ranges_valid = ranges_valid and x_range_valid
+
+            y_active, y_range_valid = _render_range_expander(
+                title="Set Y Range",
+                axis_key="y",
+                min_label="Y Min",
+                max_label="Y Max",
+                default_min=0.0,
+                default_max=y_max_default,
+            )
+            st.session_state["set_y_range"] = y_active
+            ranges_valid = ranges_valid and y_range_valid
+
+            col1, col2 = st.columns(2)
+            x_step = col1.text_input(
+                "X Tick Step",
+                value=str(st.session_state.get("x_tick_step", PLOT_DEFAULTS.x_tick_step)),
+                key="x_tick_step_ui",
+            )
+            y_step = col2.text_input(
+                "Y Tick Step",
+                value=str(st.session_state.get("y_tick_step", PLOT_DEFAULTS.y_tick_step)),
+                key="y_tick_step_ui",
+            )
+            try:
+                st.session_state["x_tick_step"] = float(x_step.replace(",", "."))
+                st.session_state["y_tick_step"] = float(y_step.replace(",", "."))
+            except ValueError:
+                pass
 
     return ranges_valid
 
@@ -262,19 +273,29 @@ def _render_export_section() -> tuple[bool, str | None]:
     export_format = None
 
     with st.expander("Export", expanded=False, icon=":material/download:"):
-        st.text_input("File Name", key="export_filename")
+        with st.container(border=True):
+            render_group_intro(
+                "Advanced Export",
+                "Create the current chart as a file without changing the active visualization settings.",
+                variant="advanced",
+            )
+            st.text_input("File Name", key="export_filename")
+            st.markdown(
+                '<p class="fx-inline-note">Use a short base name. The selected format is appended automatically.</p>',
+                unsafe_allow_html=True,
+            )
 
-        col1, col2 = st.columns(2)
-        if col1.button("Generate\nPNG", key="export_png_button", use_container_width=True):
-            export_format = "PNG"
-        if col2.button("Generate\nPDF", key="export_pdf_button", use_container_width=True):
-            export_format = "PDF"
+            col1, col2 = st.columns(2)
+            if col1.button("Generate\nPNG", key="export_png_button", use_container_width=True):
+                export_format = "PNG"
+            if col2.button("Generate\nPDF", key="export_pdf_button", use_container_width=True):
+                export_format = "PDF"
 
-        col3, col4 = st.columns(2)
-        if col3.button("Generate\nSVG", key="export_svg_button", use_container_width=True):
-            export_format = "SVG"
-        if col4.button("Generate\nEPS", key="export_eps_button", use_container_width=True):
-            export_format = "EPS"
+            col3, col4 = st.columns(2)
+            if col3.button("Generate\nSVG", key="export_svg_button", use_container_width=True):
+                export_format = "SVG"
+            if col4.button("Generate\nEPS", key="export_eps_button", use_container_width=True):
+                export_format = "EPS"
 
     return (export_format is not None, export_format)
 

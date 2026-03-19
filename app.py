@@ -61,6 +61,19 @@ def inject_custom_styles() -> None:
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
 
         <style>
+            :root {{
+                --fx-surface: rgba(255, 255, 255, 0.9);
+                --fx-surface-strong: rgba(255, 255, 255, 0.96);
+                --fx-surface-muted: #f6f8fb;
+                --fx-surface-subtle: #fbfcfe;
+                --fx-border: #d8e1eb;
+                --fx-border-strong: #c6d1dc;
+                --fx-text-soft: #506070;
+                --fx-text-muted: #6e7d8d;
+                --fx-accent-soft: rgba({red}, {green}, {blue}, 0.1);
+                --fx-shadow: 0 14px 36px rgba(24, 39, 75, 0.08);
+            }}
+
             [data-testid="stAppViewContainer"] {{
                 background: radial-gradient(
                     circle at top left,
@@ -103,33 +116,45 @@ def inject_custom_styles() -> None:
             }}
 
             [data-testid="stSidebar"] [data-testid="stExpander"] {{
-                background: #f2f4f7 !important;
-                border: 1px solid #d7dde5 !important;
-                border-radius: 12px !important;
+                background: var(--fx-surface-strong) !important;
+                border: 1px solid var(--fx-border) !important;
+                border-radius: 16px !important;
                 overflow: hidden !important;
-                margin-bottom: 0.85rem !important;
+                margin-bottom: 1rem !important;
+                box-shadow: 0 10px 24px rgba(24, 39, 75, 0.04) !important;
             }}
 
             [data-testid="stSidebar"] [data-testid="stExpander"] details {{
-                background: #f2f4f7 !important;
+                background: var(--fx-surface-strong) !important;
                 border: none !important;
-                border-radius: 12px !important;
+                border-radius: 16px !important;
             }}
 
             [data-testid="stSidebar"] [data-testid="stExpander"] summary {{
-                background: #f2f4f7 !important;
-                padding: 0.45rem 0.65rem !important;
+                background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,248,251,0.98)) !important;
+                padding: 0.65rem 0.8rem !important;
             }}
 
             [data-testid="stSidebar"] [data-testid="stExpanderDetails"] {{
-                background: #f2f4f7 !important;
-                padding: 0 0.65rem 0.65rem !important;
+                background: var(--fx-surface-strong) !important;
+                padding: 0 0.8rem 0.8rem !important;
             }}
 
             [data-testid="stMainBlockContainer"] {{
                 position: relative;
                 z-index: 1;
                 padding-top: 2rem !important;
+            }}
+
+            [data-testid="stVerticalBlockBorderWrapper"] {{
+                border-radius: 18px !important;
+                border: 1px solid var(--fx-border) !important;
+                background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,253,0.95)) !important;
+                box-shadow: var(--fx-shadow) !important;
+            }}
+
+            [data-testid="stVerticalBlockBorderWrapper"] > div {{
+                padding: 0.15rem 0.2rem !important;
             }}
 
             header[data-testid="stHeader"], [data-testid="stToolbar"] {{
@@ -193,10 +218,105 @@ def inject_custom_styles() -> None:
                 align-items: center !important;
                 justify-content: center !important;
                 line-height: 1.25 !important;
+                border-radius: 14px !important;
+                border: 1px solid var(--fx-border-strong) !important;
+                background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%) !important;
             }}
 
             [data-testid="stDecoration"] {{
                 visibility: visible !important;
+            }}
+
+            .fx-panel-header {{
+                display: flex;
+                flex-direction: column;
+                gap: 0.45rem;
+                margin-bottom: 1rem;
+            }}
+
+            .fx-panel-eyebrow {{
+                font-size: 0.78rem;
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: {bg_color_hex};
+            }}
+
+            .fx-panel-title {{
+                font-size: 1.2rem;
+                font-weight: 700;
+                line-height: 1.2;
+                color: #152231;
+            }}
+
+            .fx-panel-copy {{
+                margin: 0;
+                color: var(--fx-text-soft);
+                line-height: 1.45;
+                font-size: 0.95rem;
+            }}
+
+            .fx-kpi-row {{
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                margin-top: 0.15rem;
+            }}
+
+            .fx-kpi-chip {{
+                display: inline-flex;
+                align-items: center;
+                gap: 0.45rem;
+                padding: 0.42rem 0.7rem;
+                border-radius: 999px;
+                border: 1px solid var(--fx-border);
+                background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(241,246,252,0.98));
+                color: #1d2a39;
+                font-size: 0.85rem;
+                line-height: 1.2;
+            }}
+
+            .fx-kpi-chip__label {{
+                color: var(--fx-text-muted);
+                font-weight: 600;
+            }}
+
+            .fx-kpi-chip__value {{
+                font-weight: 700;
+            }}
+
+            .fx-sidebar-group {{
+                margin: 0.2rem 0 0.75rem;
+                padding: 0.8rem 0.9rem;
+                border-radius: 14px;
+                border: 1px solid var(--fx-border);
+                background: linear-gradient(180deg, rgba(250,252,255,0.98), rgba(243,247,251,0.98));
+            }}
+
+            .fx-sidebar-group--advanced {{
+                background: linear-gradient(180deg, rgba(252,253,255,0.98), rgba(247,249,252,0.98));
+                border-style: dashed;
+            }}
+
+            .fx-sidebar-group-title {{
+                font-size: 0.98rem;
+                font-weight: 700;
+                color: #152231;
+                margin-bottom: 0.2rem;
+            }}
+
+            .fx-sidebar-group-copy {{
+                margin: 0;
+                color: var(--fx-text-soft);
+                line-height: 1.4;
+                font-size: 0.87rem;
+            }}
+
+            .fx-inline-note {{
+                margin: 0.2rem 0 0.85rem;
+                color: var(--fx-text-soft);
+                font-size: 0.9rem;
+                line-height: 1.45;
             }}
         </style>
         """,

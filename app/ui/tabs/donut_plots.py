@@ -1,23 +1,19 @@
 """Pie and donut chart tab for the Factory-X plotting app."""
 
-from typing import Tuple
-
 import streamlit as st
 
 from app.config import PLOT_DEFAULTS
-from app.export import export_plots
 from app.plotting import plot_donut
 from app.ui.components import ColorTarget, build_color_targets, get_valid_multiselect_state, render_component_color_section
+from app.ui.tab_utils import ensure_has_data, ensure_valid_ranges, finalize_matplotlib_figures, render_matplotlib_figure
 
 
 def render(processed, options: dict) -> None:
     """Render the Pie and Donut Charts tab."""
-    if not processed.has_data:
-        st.info("Please upload files to create charts.")
+    if not ensure_has_data(processed, "Please upload files to create charts."):
         return
 
-    if not options.get("ranges_valid", True):
-        st.warning("Invalid axis ranges.")
+    if not ensure_valid_ranges(options):
         return
 
     main_col, custom_col = st.columns([4, 1])
@@ -67,27 +63,12 @@ def render(processed, options: dict) -> None:
             axis_fontsize=options.get("axis_annotation_fontsize", PLOT_DEFAULTS.axis_fontsize),
             show_legend=show_legend,
             source_unit=options.get("y_unit", PLOT_DEFAULTS.y_unit),
+            component_means=processed.overall_numeric_means,
         )
 
         if fig is None:
             st.warning("The selected components do not contain usable values.")
             return
 
-        st.pyplot(fig, width="stretch")
-
-        if options.get("export_trigger") and options.get("export_format"):
-            export_plots(
-                [(title, fig)],
-                options.get("export_filename", "export"),
-                options.get("export_format"),
-            )
-        import matplotlib.pyplot as plt
-
-        plt.close(fig)
-
-
-def _figure_size(options: dict) -> Tuple[float, float]:
-    """Calculate figure size from sidebar options (mm -> inches)."""
-    width_mm = float(options.get("plot_width", PLOT_DEFAULTS.width))
-    height_mm = float(options.get("plot_height", PLOT_DEFAULTS.height))
-    return (width_mm / 25.4, height_mm / 25.4)
+        render_matplotlib_figure(fig)
+        finalize_matplotlib_figures([(title, fig)], options)

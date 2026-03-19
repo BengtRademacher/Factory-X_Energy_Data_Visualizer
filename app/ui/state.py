@@ -192,6 +192,7 @@ def _init_ui_state() -> None:
 def reset_ui_state() -> None:
     """Reset UI widgets and clear data-driven selections."""
     selection_keys = {
+        "_cached_processed_x_axes",
         "line_selected_components",
         "secondary_axis_components",
         "bar_selected_components",

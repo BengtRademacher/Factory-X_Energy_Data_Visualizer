@@ -1,14 +1,20 @@
 """Scatter plot tab for the Factory-X plotting app."""
 
-from typing import Tuple
-
 import pandas as pd
 import streamlit as st
 
 from app.config import MAX_PLOT_ROWS, PLOT_DEFAULTS
-from app.export import export_plots
 from app.plotting import plot_scatter
 from app.ui.components import get_valid_selectbox_state
+from app.ui.tab_utils import (
+    ensure_has_data,
+    ensure_valid_ranges,
+    figure_size_from_options,
+    finalize_matplotlib_figures,
+    parse_optional_float,
+    render_matplotlib_figure,
+    sample_distribution_frame,
+)
 
 POINT_TYPE_OPTIONS = {
     "Circle": "o",
@@ -23,12 +29,10 @@ POINT_TYPE_OPTIONS = {
 
 def render(processed, options: dict) -> None:
     """Render the Scatter Plot tab."""
-    if not processed.has_data:
-        st.info("Please upload files to create charts.")
+    if not ensure_has_data(processed, "Please upload files to create charts."):
         return
 
-    if not options.get("ranges_valid", True):
-        st.warning("Invalid axis ranges.")
+    if not ensure_valid_ranges(options):
         return
 
     main_col, custom_col = st.columns([4, 1])
@@ -73,13 +77,13 @@ def render(processed, options: dict) -> None:
                 st.caption("Color Legend Scale")
                 color_label = st.text_input("Color Legend", key="scatter_color_label")
                 min_col, max_col = st.columns(2)
-                color_min, color_min_error = _parse_optional_float(
+                color_min, color_min_error = parse_optional_float(
                     min_col.text_input("Color Min", key="scatter_color_min", placeholder="Auto")
                 )
-                color_max, color_max_error = _parse_optional_float(
+                color_max, color_max_error = parse_optional_float(
                     max_col.text_input("Color Max", key="scatter_color_max", placeholder="Auto")
                 )
-                color_tick_step, color_tick_step_error = _parse_optional_float(
+                color_tick_step, color_tick_step_error = parse_optional_float(
                     st.text_input("Color Tick Step", key="scatter_color_tick_step", placeholder="Auto")
                 )
             else:
@@ -108,7 +112,7 @@ def render(processed, options: dict) -> None:
             return
 
         if len(combined) > MAX_PLOT_ROWS:
-            combined = combined.sample(n=MAX_PLOT_ROWS, random_state=42)
+            combined = sample_distribution_frame(combined, MAX_PLOT_ROWS)
             st.info(f"Large dataset detected. Sampled down to {MAX_PLOT_ROWS:,} rows.")
 
         color_col = st.session_state.get("scatter_color")
@@ -121,7 +125,7 @@ def render(processed, options: dict) -> None:
             x_col=x_col,
             y_col=y_col,
             color_col=color_col if color_col and color_col in scatter_df.columns else None,
-            figsize=_figure_size(options),
+            figsize=figure_size_from_options(options),
             axis_fontsize=options.get("axis_annotation_fontsize", PLOT_DEFAULTS.axis_fontsize),
             axis_title_fontsize=options.get("axis_title_fontsize", PLOT_DEFAULTS.axis_title_fontsize),
             point_size=point_size,
@@ -145,33 +149,5 @@ def render(processed, options: dict) -> None:
             st.warning("No valid data points were found.")
             return
 
-        st.pyplot(fig, width="stretch")
-
-        if options.get("export_trigger") and options.get("export_format"):
-            export_plots(
-                [("Scatter Plot", fig)],
-                options.get("export_filename", "export"),
-                options.get("export_format"),
-            )
-        import matplotlib.pyplot as plt
-
-        plt.close(fig)
-
-
-def _figure_size(options: dict) -> Tuple[float, float]:
-    """Calculate figure size from sidebar options (mm -> inches)."""
-    width_mm = float(options.get("plot_width", PLOT_DEFAULTS.width))
-    height_mm = float(options.get("plot_height", PLOT_DEFAULTS.height))
-    return (width_mm / 25.4, height_mm / 25.4)
-
-
-def _parse_optional_float(value: str | None) -> tuple[float | None, bool]:
-    """Parse a blankable numeric input."""
-    normalized = (value or "").strip()
-    if not normalized:
-        return (None, False)
-
-    try:
-        return (float(normalized.replace(",", ".")), False)
-    except ValueError:
-        return (None, True)
+        render_matplotlib_figure(fig)
+        finalize_matplotlib_figures([("Scatter Plot", fig)], options)

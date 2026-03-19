@@ -6,7 +6,7 @@ import pandas as pd
 
 matplotlib.use("Agg")
 
-from app.plotting import plot_boxplot, plot_histogram, plot_line, plot_scatter
+from app.plotting import plot_bar, plot_boxplot, plot_donut, plot_histogram, plot_line, plot_sankey_energy_flow, plot_scatter
 
 
 def test_plot_boxplot_uses_average_per_elapsed_interval() -> None:
@@ -255,3 +255,82 @@ def test_plot_line_stacked_keeps_secondary_axis_separate() -> None:
     assert primary_line_data["b"] == [4.0, 6.0, 8.0]
     assert secondary_line_data["secondary"] == [10.0, 20.0, 30.0]
     assert tuple(secondary_ax.get_ylim()) == (0.0, 40.0)
+
+
+def test_plot_bar_can_use_precomputed_file_means() -> None:
+    fig = plot_bar(
+        df_by_file={"a.csv": pd.DataFrame({"motor": [999.0]})},
+        components=["motor"],
+        title="Bar Chart",
+        label_rotation=0,
+        colors={"motor": "#4B5BA9"},
+        hide_x_labels=False,
+        figsize=(4, 3),
+        line_width=1.0,
+        axis_fontsize=10,
+        axis_title_fontsize=12,
+        ylim=None,
+        y_unit="W",
+        per_file_means=pd.DataFrame({"motor": [5.0]}, index=["a.csv"]),
+    )
+
+    bar_height = fig.axes[0].patches[0].get_height()
+    assert bar_height == 5.0
+
+
+def test_plot_boxplot_can_use_precomputed_interval_means() -> None:
+    fig = plot_boxplot(
+        df_by_file={"a.csv": pd.DataFrame({"motor": [999.0]}, index=pd.to_timedelta([0], unit="s"))},
+        components=["motor"],
+        title="Box Plot",
+        figsize=(4, 3),
+        axis_fontsize=10,
+        axis_title_fontsize=12,
+        colors={"motor": "#4B5BA9"},
+        line_width=1.0,
+        label_rotation=0,
+        ylim=None,
+        y_unit="W",
+        interval_means_by_file={"a.csv": pd.DataFrame({"motor": [3.0, 7.0]})},
+    )
+
+    median_y = fig.axes[0].lines[4].get_ydata()[0]
+    assert median_y == 5.0
+
+
+def test_plot_donut_can_use_precomputed_component_means() -> None:
+    fig = plot_donut(
+        combined_df=pd.DataFrame(),
+        components=["motor", "pump"],
+        colors={"motor": "#4B5BA9", "pump": "#006DB9"},
+        hole=0.4,
+        label_mode="Percent",
+        total_target_kw=0.0,
+        show_others=False,
+        chart_size_px=300,
+        title="Donut",
+        axis_fontsize=10,
+        show_legend=False,
+        source_unit="kW",
+        component_means=pd.Series({"motor": 2.0, "pump": 6.0}),
+    )
+
+    assert fig is not None
+    assert len(fig.axes[0].patches) == 2
+
+
+def test_plot_sankey_can_use_precomputed_component_means() -> None:
+    fig = plot_sankey_energy_flow(
+        df=pd.DataFrame(),
+        selected_electric=["motor"],
+        selected_pneumatic=["valve"],
+        productive_vars=["motor"],
+        figsize=(4, 3),
+        axis_fontsize=10,
+        colors={"Electric": "#4B5BA9", "Pneumatic": "#01A579"},
+        unit="W",
+        component_means=pd.Series({"motor": 10.0, "valve": 5.0}),
+    )
+
+    assert fig is not None
+    assert list(fig.data[0]["link"]["value"])[:2] == [10.0, 5.0]

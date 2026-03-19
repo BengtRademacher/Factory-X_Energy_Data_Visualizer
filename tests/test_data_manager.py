@@ -68,3 +68,24 @@ def test_ensure_elapsed_time_accepts_german_time_columns(manager: DataManager) -
 
     assert "elapsedTime" in result.columns
     assert result["elapsedTime"].dt.total_seconds().tolist() == [0.0, 1.0, 2.5]
+
+
+def test_load_files_exposes_metadata_diagnostics_and_means(manager: DataManager) -> None:
+    csv_content = "value,status\n10,on\n5,off\n30,on"
+    buffer = _csv_buffer(csv_content)
+
+    data = manager.load_files([buffer])
+
+    assert data.available_columns == ["value", "status"]
+    assert data.numeric_columns == ["value"]
+    assert data.per_file_numeric_means.loc["test.csv", "value"] == 15.0
+    assert data.overall_numeric_means["value"] == 15.0
+    assert "value" in data.interval_means_by_file["test.csv"].columns
+    assert any("Derived time from the row index" in diagnostic.message for diagnostic in data.diagnostics)
+
+
+def test_load_files_uses_content_based_upload_signatures(manager: DataManager) -> None:
+    first = manager.load_files([_csv_buffer("elapsedTime,value\n0,10\n1,20")])
+    second = manager.load_files([_csv_buffer("elapsedTime,value\n0,10\n1,999")])
+
+    assert first.upload_signature != second.upload_signature

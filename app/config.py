@@ -179,7 +179,7 @@ TAB_SPECS = [
     TabSpec("Data Processing", ":material/settings: Data Processing"),
     TabSpec("Line Plots", ":material/trending_up: Line Plots"),
     TabSpec("Bar Charts", ":material/bar_chart: Bar Charts"),
-    TabSpec("Box Plots", ":material/insights: Box Plots"),
+    TabSpec("Box Plots", ":material/candlestick_chart: Box Plots"),
     TabSpec("Pie and Donut Charts", ":material/pie_chart: Pie and Donut Charts"),
     TabSpec("Scatter Plot", ":material/scatter_plot: Scatter Plot"),
     TabSpec("Histogram", ":material/equalizer: Histogram"),

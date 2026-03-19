@@ -1,23 +1,25 @@
 """Box plot tab for the Factory-X plotting app."""
 
-from typing import Tuple
-
 import streamlit as st
 
 from app.config import PLOT_DEFAULTS
-from app.export import export_plots
 from app.plotting import plot_boxplot
 from app.ui.components import build_color_targets, get_valid_multiselect_state, render_component_color_section
+from app.ui.tab_utils import (
+    ensure_has_data,
+    ensure_valid_ranges,
+    figure_size_from_options,
+    finalize_matplotlib_figures,
+    render_matplotlib_figure,
+)
 
 
 def render(processed, options: dict) -> None:
     """Render the Box Plots tab."""
-    if not processed.has_data:
-        st.info("Please upload files to create charts.")
+    if not ensure_has_data(processed, "Please upload files to create charts."):
         return
 
-    if not options.get("ranges_valid", True):
-        st.warning("Invalid axis ranges.")
+    if not ensure_valid_ranges(options):
         return
 
     main_col, custom_col = st.columns([4, 1])
@@ -49,7 +51,7 @@ def render(processed, options: dict) -> None:
             df_by_file=processed.frames_by_file,
             components=components,
             title="Box Plot",
-            figsize=_figure_size(options),
+            figsize=figure_size_from_options(options),
             axis_fontsize=options.get("axis_annotation_fontsize", PLOT_DEFAULTS.axis_fontsize),
             axis_title_fontsize=options.get("axis_title_fontsize", PLOT_DEFAULTS.axis_title_fontsize),
             colors=colors,
@@ -61,24 +63,9 @@ def render(processed, options: dict) -> None:
             y_tick_step=options.get("y_tick_step"),
             y_label=options.get("y_axis_label", PLOT_DEFAULTS.y_label),
             box_width=box_width,
+            interval_means_by_file=processed.interval_means_by_file,
         )
 
         if fig:
-            st.pyplot(fig, width="stretch")
-
-            if options.get("export_trigger") and options.get("export_format"):
-                export_plots(
-                    [("Box Plot", fig)],
-                    options.get("export_filename", "export"),
-                    options.get("export_format"),
-                )
-            import matplotlib.pyplot as plt
-
-            plt.close(fig)
-
-
-def _figure_size(options: dict) -> Tuple[float, float]:
-    """Calculate figure size from sidebar options (mm -> inches)."""
-    width_mm = float(options.get("plot_width", PLOT_DEFAULTS.width))
-    height_mm = float(options.get("plot_height", PLOT_DEFAULTS.height))
-    return (width_mm / 25.4, height_mm / 25.4)
+            render_matplotlib_figure(fig)
+            finalize_matplotlib_figures([("Box Plot", fig)], options)

@@ -1,24 +1,29 @@
 """Line plot tab for the Factory-X plotting app."""
 
-from typing import Tuple
-
 import streamlit as st
 
 from app.config import MAX_PLOT_ROWS, PLOT_DEFAULTS
-from app.export import export_plots
 from app.plotting import plot_line
 from app.ui.components import build_color_targets, get_valid_multiselect_state, render_component_color_section
-from app.x_axis import resolve_processed_x_axis
+from app.ui.tab_utils import (
+    ensure_has_data,
+    ensure_valid_ranges,
+    figure_size_from_options,
+    finalize_matplotlib_figures,
+    format_float_input,
+    get_cached_processed_x_axis,
+    parse_required_float,
+    render_matplotlib_figure,
+    sample_time_ordered_pair,
+)
 
 
 def render(processed, options: dict) -> None:
     """Render the Line Plots tab."""
-    if not processed.has_data:
-        st.info("Please upload files to create charts.")
+    if not ensure_has_data(processed, "Please upload files to create charts."):
         return
 
-    if not options.get("ranges_valid", True):
-        st.warning("Invalid axis ranges. Please ensure Y Min < Y Max and X Min < X Max.")
+    if not ensure_valid_ranges(options, "Invalid axis ranges. Please ensure Y Min < Y Max and X Min < X Max."):
         return
 
     x_source_column = options.get("x_source_column")
@@ -49,7 +54,7 @@ def render(processed, options: dict) -> None:
             st.info("Please choose an X source in the sidebar.")
             return
 
-        x_resolution = resolve_processed_x_axis(processed, x_source_column)
+        x_resolution = get_cached_processed_x_axis(processed, x_source_column)
         if x_resolution.error:
             st.warning(x_resolution.error)
             return
@@ -62,9 +67,7 @@ def render(processed, options: dict) -> None:
         x_values = x_resolution.values.reset_index(drop=True)
 
         if len(combined_df) > MAX_PLOT_ROWS:
-            sampled_index = combined_df.sample(n=MAX_PLOT_ROWS, random_state=42).sort_index().index
-            combined_df = combined_df.loc[sampled_index].reset_index(drop=True)
-            x_values = x_values.loc[sampled_index].reset_index(drop=True)
+            combined_df, x_values = sample_time_ordered_pair(combined_df, x_values, MAX_PLOT_ROWS)
             st.info(f"Large dataset detected. Sampled down to {MAX_PLOT_ROWS:,} rows.")
 
         xlim = (options.get("x_min"), options.get("x_max")) if options.get("set_x_range") else None
@@ -77,7 +80,7 @@ def render(processed, options: dict) -> None:
             components=components,
             title="Line Plot",
             colors=colors,
-            figsize=_figure_size(options),
+            figsize=figure_size_from_options(options),
             line_width=options.get("line_width", PLOT_DEFAULTS.line_width),
             axis_fontsize=options.get("axis_annotation_fontsize", PLOT_DEFAULTS.axis_fontsize),
             axis_title_fontsize=options.get("axis_title_fontsize", PLOT_DEFAULTS.axis_title_fontsize),
@@ -94,17 +97,8 @@ def render(processed, options: dict) -> None:
         )
 
         if fig:
-            st.pyplot(fig, width="stretch")
-
-            if options.get("export_trigger") and options.get("export_format"):
-                export_plots(
-                    [("Line Plot", fig)],
-                    options.get("export_filename", "export"),
-                    options.get("export_format"),
-                )
-            import matplotlib.pyplot as plt
-
-            plt.close(fig)
+            render_matplotlib_figure(fig)
+            finalize_matplotlib_figures([("Line Plot", fig)], options)
 
 
 def _render_secondary_axis(component_options: list[str]) -> dict:
@@ -132,10 +126,10 @@ def _render_secondary_axis(component_options: list[str]) -> dict:
 
         st.text_input("Secondary Label", key="secondary_axis_label")
         st.text_input("Secondary Unit", key="secondary_axis_unit")
-        secondary_tick_step, secondary_tick_step_error = _parse_required_float(
+        secondary_tick_step, secondary_tick_step_error = parse_required_float(
             st.text_input(
                 "Secondary Tick Step",
-                value=_format_float_input(st.session_state.get("secondary_axis_tick_step")),
+                value=format_float_input(st.session_state.get("secondary_axis_tick_step")),
                 key="secondary_axis_tick_step_ui",
             )
         )
@@ -150,17 +144,17 @@ def _render_secondary_axis(component_options: list[str]) -> dict:
 
         st.caption("Range")
         col1, col2 = st.columns(2)
-        sec_min, sec_min_error = _parse_required_float(
+        sec_min, sec_min_error = parse_required_float(
             col1.text_input(
                 "Secondary Min",
-                value=_format_float_input(st.session_state.get("secondary_axis_min")),
+                value=format_float_input(st.session_state.get("secondary_axis_min")),
                 key="secondary_axis_min_ui",
             )
         )
-        sec_max, sec_max_error = _parse_required_float(
+        sec_max, sec_max_error = parse_required_float(
             col2.text_input(
                 "Secondary Max",
-                value=_format_float_input(st.session_state.get("secondary_axis_max")),
+                value=format_float_input(st.session_state.get("secondary_axis_max")),
                 key="secondary_axis_max_ui",
             )
         )
@@ -181,31 +175,3 @@ def _render_secondary_axis(component_options: list[str]) -> dict:
         "secondary_y_tick_step": secondary_tick_step,
         "secondary_ylim": secondary_ylim,
     }
-
-
-def _figure_size(options: dict) -> Tuple[float, float]:
-    """Calculate figure size from sidebar options (mm -> inches)."""
-    width_mm = float(options.get("plot_width", PLOT_DEFAULTS.width))
-    height_mm = float(options.get("plot_height", PLOT_DEFAULTS.height))
-    return (width_mm / 25.4, height_mm / 25.4)
-
-
-def _parse_required_float(value: str | None) -> tuple[float | None, bool]:
-    """Parse a required numeric input."""
-    normalized = (value or "").strip()
-    if not normalized:
-        return (None, True)
-
-    try:
-        return (float(normalized.replace(",", ".")), False)
-    except ValueError:
-        return (None, True)
-
-
-def _format_float_input(value: object) -> str:
-    """Format numeric state values for plain text inputs."""
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return f"{value:g}".replace(".", ",")
-    if value is None:
-        return ""
-    return str(value)
