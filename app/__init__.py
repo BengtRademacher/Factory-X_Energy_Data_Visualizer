@@ -1,3 +1,3 @@
-"""Anwendungs-Paket (UI, Plotting, Datenverarbeitung, Export)."""
+"""Application package for UI, plotting, data processing, and export."""
 
 

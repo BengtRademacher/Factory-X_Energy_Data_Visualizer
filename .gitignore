@@ -52,32 +52,32 @@ coverage.xml
 .DS_Store
 Thumbs.db
 
-# Example Data - Nur spezifische Dateien erlauben
+# Example data - allow only specific files
 example_data/*
 !example_data/PROCESSING_Alu_100.csv
 
 # Streamlit
 .streamlit/secrets.toml
 
-# Exports (werden lokal generiert)
+# Exports (generated locally)
 *.zip
 *.pdf
 *.eps
 
-# Bilder generell ignorieren (für Exports), aber assets/ Ordner explizit erlauben
+# Ignore images by default for exports, but allow the assets folder explicitly
 *.png
 *.svg
 !assets/*.png
 !assets/*.svg
 
-# Logs & Temporäre Dateien
+# Logs and temporary files
 *.log
 *.tmp
 *.temp
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Weitere Python-spezifische Ignores (aus GitHub Template)
+# Additional Python-specific ignores (from the GitHub template)
 .mypy_cache/
 .pytype/
 .ipynb_checkpoints

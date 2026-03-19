@@ -4,149 +4,148 @@
 
 # Factory-X Energy Data Visualizer v1.0
 
-*Stand: 18. März 2026*
+*Updated: March 18, 2026*
 
-Der **Factory-X Energy Data Visualizer** ist eine Streamlit-basierte Anwendung zur interaktiven Visualisierung und Analyse von Energiedaten aus Fertigungsprozessen. Sie ermöglicht die schnelle Erstellung publikationsreifer Diagramme aus Maschinen-Messdaten mit umfangreichen Anpassungsmöglichkeiten.
+The **Factory-X Energy Data Visualizer** is a Streamlit application for the interactive visualization and analysis of energy data from manufacturing processes. It enables fast creation of publication-ready charts from machine measurement data with extensive customization options.
 
-## Kernfunktionen
+## Core Features
 
-| Tab | Funktion |
-|-----|----------|
-| **Data Processing** | Import von Excel- und CSV-Dateien, Datenvorschau, Komponenten-Aliasing und Zeitbereichsfilterung. |
-| **Linienplots** | Zeitreihenvisualisierung elektrischer und pneumatischer Leistungsdaten mit optionaler Sekundärachse. |
-| **Säulendiagramme** | Gestapelte oder gruppierte Balkendiagramme mit Mittelwert- oder Summenberechnung und Vergleichsfunktion. |
-| **Boxplots** | Statistische Verteilungsanalysen zur Identifikation von Ausreißern und Streuungen. |
-| **Torten und Donuts** | Anteilsvisualisierung mit konfigurierbarem Sollwert und prozentual oder absoluter Beschriftung. |
-| **Scatter / Histogramm** | Korrelationsanalysen und Verteilungsdarstellungen für tiefere Einblicke in die Messdaten. |
-| **Sankey** | Energieflussdiagramme zur Darstellung von Verbrauchsverteilungen zwischen Komponenten. |
+| Tab | Purpose |
+|-----|---------|
+| **Data Processing** | Import Excel and CSV files, inspect previews, and create quick summaries of loaded datasets. |
+| **Line Plots** | Visualize electric and pneumatic power signals over time with an optional secondary axis. |
+| **Bar Charts** | Build stacked or grouped bar charts using average or sum aggregation. |
+| **Box Plots** | Explore distributions and outliers across selected components. |
+| **Pie and Donut Charts** | Show proportional energy shares with optional target scaling and percentage or kW labels. |
+| **Scatter Plot / Histogram** | Explore correlations and distributions in the measurement data. |
+| **Sankey** | Display energy flow distributions between selected component groups. |
 
 ## Demo
 
-Die App ist live verfügbar auf der **Streamlit Community Cloud**:
+The app is available on **Streamlit Community Cloud**:
 
-👉 [**Factory-X Energy Data Visualizer starten**](https://factory-x-energy-data-visualizer.streamlit.app)
+[**Launch the Factory-X Energy Data Visualizer**](https://factory-x-energy-data-visualizer.streamlit.app)
 
-## Installation (Lokale Entwicklung)
+## Installation
 
-1. **Repository klonen**:
+1. **Clone the repository**
    ```bash
    git clone https://github.com/YOUR_USERNAME/Factory-X_Energy_Data_Visualizer.git
    cd Factory-X_Energy_Data_Visualizer
    ```
 
-2. **Abhängigkeiten installieren**:
+2. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Anwendung starten**:
+3. **Start the application**
    ```bash
    streamlit run app.py
    ```
 
-   Die Anwendung öffnet sich automatisch im Browser unter `http://localhost:8501`.
+The application opens in your browser at `http://localhost:8501`.
 
-## Projektstruktur
+## Project Structure
 
-### Architektur im Überblick
+The application is organized into four main layers:
 
-Die Anwendung ist in vier klar getrennte Ebenen aufgeteilt:
+1. **Entry Point and Branding**
+   `app.py` initializes Streamlit, sets the page layout, and injects the Factory-X branding.
 
-1. **Start und Branding**
-   `app.py` initialisiert Streamlit, setzt das Seitenlayout und injiziert das Factory-X Branding.
+2. **Data Handling**
+   `app/data_manager.py` loads CSV and Excel files, derives or normalizes `elapsedTime`, and combines multiple files into one shared dataset.
+   `app/x_axis.py` resolves a shared X axis across files while keeping compatibility with existing German-style time columns such as `zeit`.
 
-2. **Datenfluss**
-   `app/data_manager.py` lädt CSV-/Excel-Dateien, erkennt oder erzeugt `elapsedTime` und führt mehrere Dateien zu einem gemeinsamen Datenbestand zusammen.
-   `app/preprocessor.py` übernimmt darauf aufbauend Aliasing, Zeitfilter und die Harmonisierung der Daten für alle Visualisierungsmodule.
+3. **UI Orchestration**
+   `app/main.py` coordinates upload, sidebar state, shared options, and tab rendering.
+   `app/ui/` contains session-state helpers, reusable UI components, and all tab modules.
 
-3. **UI-Orchestrierung**
-   `app/main.py` steuert den gesamten Ablauf aus Upload, Sidebar, Preprocessing und Tab-Rendering.
-   Unter `app/ui/` liegen Session-State, wiederverwendbare UI-Bausteine und die Sidebar-Logik.
-
-4. **Visualisierung und Export**
-   `app/plotting.py` enthält die Matplotlib- und Plotly-Funktionen für die Diagramme.
-   `app/export.py` kapselt den Export der erzeugten Plots als PNG, PDF, SVG und EPS.
-
-### Verzeichnisbaum
+4. **Plotting and Export**
+   `app/plotting.py` contains the Matplotlib and Plotly chart functions.
+   `app/export.py` provides export helpers for PNG, PDF, SVG, and EPS downloads.
 
 ```text
 Factory-X_Energy_Data_Visualizer/
-├── app.py                           # Streamlit-Einstiegspunkt, Page Config, Branding/CSS
-├── requirements.txt                 # Python-Abhängigkeiten
-├── pytest.ini                       # Test-Konfiguration
-├── README.md                        # Projektdokumentation
-├── README_example.md                # Beispiel-/Alternativfassung der README
-├── LICENSE                          # Lizenzdatei
-├── .devcontainer/
-│   └── devcontainer.json            # Entwicklungsumgebung für Container/VS Code
-├── .streamlit/
-│   └── config.toml                  # Streamlit-spezifische Konfiguration
-├── app/
-│   ├── __init__.py                  # Paketmarker
-│   ├── config.py                    # Zentrale Defaults für Farben, Tabs und Plot-Optionen
-│   ├── data_manager.py              # Dateieinlesung, Zeitnormalisierung und Datenzusammenführung
-│   ├── export.py                    # Download- und Exportlogik für Matplotlib/Plotly-Figuren
-│   ├── main.py                      # Orchestrierung von Upload, Sidebar, Preprocessing und Tabs
-│   ├── plotting.py                  # Plot-Funktionen für Linien-, Balken-, Box-, Histogramm- und Sankey-Diagramme
-│   ├── preprocessor.py              # Aliasing, Zeitfilter und Aufbereitung für die UI
-│   └── ui/
-│       ├── __init__.py              # Paketmarker für die UI-Schicht
-│       ├── components.py            # Wiederverwendbare UI-Widgets, z. B. Farbauswahl
-│       ├── sidebar.py               # Globale Einstellungen für Daten, Darstellung und Export
-│       ├── state.py                 # Verwaltung des Streamlit Session State
-│       └── tabs/
-│           ├── __init__.py          # Importiert die Tab-Module
-│           ├── data_processing.py   # Vorschau, Summary und Quick-Plot der eingelesenen Daten
-│           ├── line_plots.py        # Zeitreihenplots mit optionaler Sekundärachse
-│           ├── bar_plots.py         # Säulendiagramme und Vergleichsansichten
-│           ├── box_plots.py         # Boxplot-Darstellungen für Verteilungsanalysen
-│           ├── donut_plots.py       # Torten- und Donut-Diagramme
-│           ├── scatter_plots.py     # Scatter-Plots für Korrelationsanalysen
-│           ├── histogram_plots.py   # Histogramme zur Verteilungsdarstellung
-│           └── sankey_plots.py      # Sankey-Visualisierungen der Energieflüsse
-├── assets/
-│   ├── FX_logo_top_left.png         # Logo für Sidebar und README
-│   └── FX_style_top_right.svg       # Dekoratives Branding-Element im Hintergrund
-├── docs/
-│   └── matplotlib_defaults.md       # Dokumentation der Plot-Defaults und Exportparameter
-├── example_data/
-│   └── PROCESSING_Alu_100.csv       # Beispieldatensatz für lokale Tests und Demo-Zwecke
-└── tests/
-    ├── __init__.py                  # Paketmarker für Tests
-    ├── test_data_manager.py         # Tests für Datenimport und Aggregationslogik
-    └── test_ui_manager.py           # Basis-Tests für Sidebar und Session-State
+|-- app.py
+|-- requirements.txt
+|-- pytest.ini
+|-- README.md
+|-- README_example.md
+|-- LICENSE
+|-- .devcontainer/
+|   `-- devcontainer.json
+|-- .streamlit/
+|   `-- config.toml
+|-- app/
+|   |-- __init__.py
+|   |-- config.py
+|   |-- data_manager.py
+|   |-- export.py
+|   |-- main.py
+|   |-- plotting.py
+|   |-- x_axis.py
+|   `-- ui/
+|       |-- __init__.py
+|       |-- components.py
+|       |-- sidebar.py
+|       |-- state.py
+|       `-- tabs/
+|           |-- __init__.py
+|           |-- data_processing.py
+|           |-- line_plots.py
+|           |-- bar_plots.py
+|           |-- box_plots.py
+|           |-- donut_plots.py
+|           |-- scatter_plots.py
+|           |-- histogram_plots.py
+|           `-- sankey_plots.py
+|-- assets/
+|   |-- FX_logo_top_left.png
+|   `-- FX_style_top_right.svg
+|-- docs/
+|   `-- matplotlib_defaults.md
+|-- example_data/
+|   `-- PROCESSING_Alu_100.csv
+`-- tests/
+    |-- __init__.py
+    |-- test_data_manager.py
+    |-- test_ui_components.py
+    |-- test_ui_manager.py
+    `-- test_x_axis.py
 ```
 
-### Datenfluss in Kurzform
+## Data Flow
 
 ```text
-Datei-Upload
+File Upload
     -> DataManager
-    -> Preprocessor
-    -> Sidebar-Optionen + Session State
-    -> Tab-spezifische Renderer
+    -> Shared X-Axis Resolution
+    -> Sidebar Options + Session State
+    -> Tab Renderers
     -> Plotting / Export
 ```
 
-## Design und Styling
+## Design and Styling
 
-Die Anwendung folgt dem **Factory-X Design-Guide**:
-- **Material Design**: Material Symbols Rounded für intuitive Navigation
-- **Responsive Layout**: Optimiert für Wide-Mode mit Drei-Spalten-Layout
-- **Branding**: Factory-X Logos und Farbschema mit transparentem Hintergrund-Gradienten
+The app follows the **Factory-X design guide**:
 
-## Technologie-Stack
+- **Material Design** with Material Symbols Rounded
+- **Responsive layout** optimized for Streamlit wide mode
+- **Factory-X branding** with logo assets and a translucent background gradient
 
-| Kategorie | Technologie |
-|-----------|-------------|
-| Frontend/Backend | Streamlit |
-| Datenanalyse | Pandas, NumPy |
-| Visualisierung | Plotly, Matplotlib |
-| Export | Matplotlib-Export, Plotly-Export, Kaleido |
-| Tabellenverarbeitung | OpenPyXL |
+## Technology Stack
+
+| Category | Technology |
+|----------|------------|
+| Frontend / Backend | Streamlit |
+| Data Analysis | Pandas, NumPy |
+| Visualization | Plotly, Matplotlib |
+| Export | Matplotlib export, Plotly export, Kaleido |
+| Spreadsheet Processing | OpenPyXL |
 
 ---
 
 <p align="center">
-  <i>Entwickelt im Rahmen des Factory-X Projekts zur Steigerung der Energieeffizienz in der Produktion.</i>
+  <i>Developed as part of the Factory-X project to improve energy efficiency in production.</i>
 </p>

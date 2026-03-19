@@ -40,7 +40,7 @@ def test_sum_components(manager: DataManager) -> None:
 
     assert not result.empty
     assert result.shape == (3, 1)
-    assert result.columns == ["file"]
+    assert list(result.columns) == ["file"]
     assert result.iloc[:, 0].tolist() == [5, 7, 9]
 
 
@@ -55,9 +55,16 @@ def test_sum_categories(manager: DataManager) -> None:
     ).set_index("elapsedTime")
 
     data = {"file": df}
-
     result = manager.sum_categories(data, ["elec_a"], ["pneu_a"])
 
-    assert list(result.columns) == ["Elektrisch", "Pneumatisch"]
+    assert list(result.columns) == ["Electric", "Pneumatic"]
     assert result.iloc[0].tolist() == [1, 4]
 
+
+def test_ensure_elapsed_time_accepts_german_time_columns(manager: DataManager) -> None:
+    frame = pd.DataFrame({"zeit": [0, 1, 2.5], "power": [1, 2, 3]})
+
+    result = manager.ensure_elapsed_time(frame.copy(), "demo.csv")
+
+    assert "elapsedTime" in result.columns
+    assert result["elapsedTime"].dt.total_seconds().tolist() == [0.0, 1.0, 2.5]

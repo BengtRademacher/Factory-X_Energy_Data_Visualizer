@@ -1,100 +1,59 @@
-"""Donut/Tortendiagramm Tab für die Factory-X Plotting-App."""
+"""Pie and donut chart tab for the Factory-X plotting app."""
 
-import streamlit as st
 from typing import Tuple
 
-from app.config import DEFAULT_COLORS, PLOT_DEFAULTS, DONUT_DEFAULTS
-from app.plotting import plot_donut
+import streamlit as st
+
+from app.config import PLOT_DEFAULTS
 from app.export import export_plots
-from app.ui.components import render_color_selector
+from app.plotting import plot_donut
+from app.ui.components import ColorTarget, build_color_targets, get_valid_multiselect_state, render_component_color_section
 
 
 def render(processed, options: dict) -> None:
-    """Rendert den Donut Tab."""
-    
+    """Render the Pie and Donut Charts tab."""
     if not processed.has_data:
-        st.info("Bitte laden Sie Dateien hoch, um Diagramme zu erstellen.")
+        st.info("Please upload files to create charts.")
         return
-    
+
     if not options.get("ranges_valid", True):
-        st.warning("Ungültige Achsenbereiche.")
+        st.warning("Invalid axis ranges.")
         return
-    
-    # Zwei-Spalten-Layout
+
     main_col, custom_col = st.columns([4, 1])
-    
-    alias_pool = options.get("alias_pool", [])
-    
+    component_options = options.get("numeric_plot_columns", [])
+
     with custom_col:
-        st.markdown("### ⚙️ Optionen")
-        
-        # Komponentenauswahl
+        st.markdown("### :material/tune: Options")
+
         components = st.multiselect(
-            "Komponenten",
-            options=alias_pool,
-            default=st.session_state.get("donut_components", []),
-            key="donut_components"
+            "Components",
+            options=component_options,
+            default=get_valid_multiselect_state("donut_components", component_options),
+            key="donut_components",
         )
-        
-        # Farben
-        colors = _render_color_picker(components, "donut")
-        
-        st.divider()
-        
-        # Donut-Optionen
-        hole = st.slider(
-            "Donut-Öffnung",
-            0.0, 0.9,
-            step=0.05,
-            key="donut_hole"
-        )
-        
-        chart_size = st.slider(
-            "Diagrammgröße (px)",
-            300, 1000,
-            step=10,
-            key="donut_chart_size"
-        )
-        
-        label_mode = st.selectbox(
-            "Beschriftung",
-            ["Prozent", "kW"],
-            key="donut_label_mode"
-        )
-        
-        show_legend = st.checkbox(
-            "Legende anzeigen",
-            key="donut_show_legend"
-        )
-        
-        show_others = st.checkbox(
-            "'Others'-Segment",
-            key="donut_show_others"
-        )
-        
-        total_target_kw = st.number_input(
-            "Skalierter Gesamtbedarf (kW)",
-            min_value=0.0,
-            step=0.5,
-            key="donut_total_target_kw"
-        )
-        
-        title = st.text_input(
-            "Titel",
-            key="donut_title"
-        )
-        
-        # Others-Farbe
+
+        show_others = st.checkbox("'Others' Segment", key="donut_show_others")
+
+        color_targets = build_color_targets(components)
         if show_others:
-            key = "donut_color_Others"
-            default = "#888888"
-            colors["Others"] = render_color_selector("Farbe: Others", key, default)
-    
+            color_targets.append(ColorTarget(id="Others", label="Others Color", default_color="#888888"))
+        colors = render_component_color_section("donut", color_targets)
+
+        st.divider()
+
+        hole = st.slider("Donut Hole", 0.0, 0.9, step=0.05, key="donut_hole")
+        chart_size = st.slider("Chart Size (px)", 300, 1000, step=10, key="donut_chart_size")
+        label_mode = st.selectbox("Labels", ["Percent", "kW"], key="donut_label_mode")
+        show_legend = st.checkbox("Show Legend", key="donut_show_legend")
+        total_target_kw = st.number_input("Scaled Total Demand (kW)", min_value=0.0, step=0.5, key="donut_total_target_kw")
+        title = st.text_input("Title", key="donut_title")
+
     with main_col:
         if not components:
-            st.info("Bitte wählen Sie mindestens eine Komponente aus.")
+            st.info("Please select at least one component.")
             return
-        
+
         fig = plot_donut(
             combined_df=processed.combined_frame,
             components=components,
@@ -109,14 +68,13 @@ def render(processed, options: dict) -> None:
             show_legend=show_legend,
             source_unit=options.get("y_unit", PLOT_DEFAULTS.y_unit),
         )
-        
+
         if fig is None:
-            st.warning("Die ausgewählten Komponenten enthalten keine verwertbaren Werte.")
+            st.warning("The selected components do not contain usable values.")
             return
-        
+
         st.pyplot(fig, width="stretch")
-        
-        # Globaler Export über Sidebar
+
         if options.get("export_trigger") and options.get("export_format"):
             export_plots(
                 [(title, fig)],
@@ -124,29 +82,12 @@ def render(processed, options: dict) -> None:
                 options.get("export_format"),
             )
         import matplotlib.pyplot as plt
+
         plt.close(fig)
 
 
-def _render_color_picker(components: list, prefix: str) -> dict:
-    """Rendert Farbauswahl für die Komponenten."""
-    
-    colors = {}
-    if not components:
-        return colors
-    
-    with st.expander("🎨 Farben", expanded=False):
-        for i, comp in enumerate(components):
-            key = f"{prefix}_color_{comp}"
-            default = DEFAULT_COLORS[i % len(DEFAULT_COLORS)]
-            colors[comp] = render_color_selector(f"{comp}", key, default)
-    
-    st.session_state[f"{prefix}_colors"] = colors
-    return colors
-
-
 def _figure_size(options: dict) -> Tuple[float, float]:
-    """Berechnet die Figurengröße aus den Optionen (mm -> Zoll)."""
+    """Calculate figure size from sidebar options (mm -> inches)."""
     width_mm = float(options.get("plot_width", PLOT_DEFAULTS.width))
     height_mm = float(options.get("plot_height", PLOT_DEFAULTS.height))
     return (width_mm / 25.4, height_mm / 25.4)
-

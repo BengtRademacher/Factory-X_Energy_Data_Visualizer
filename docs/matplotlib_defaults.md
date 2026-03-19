@@ -7,7 +7,7 @@ agent can reproduce the exact visuals without reading the Python source.
 
 | Setting | Value | Source |
 | ------- | ----- | ------ |
-| `plt.rcParams['font.family']` | `'Arial'` | top-level of `app/plotting.py` |
+| `plt.rcParams['font.family']` | `['Aptos', 'Segoe UI', 'sans-serif']` | top-level of `app/plotting.py` |
 | `mpl.rcParams['pdf.fonttype']` | `3` normally, overridden to `42` only during export | `export.reset_font_for_display()` / `set_font_for_export()` |
 | `mpl.rcParams['ps.fonttype']` | `3` normally, `42` during export | same as above |
 | `mpl.rcParams['svg.fonttype']` | `'path'` normally, `'none'` during export | same as above |
@@ -32,18 +32,19 @@ Two shared helpers influence axis layout:
 ## Line Plots (`plot_line`)
 
 Inputs:
-- `combined_df`: must contain `elapsedTime` column (`Timedelta`) and numeric columns for each component.
+- `combined_df`: must contain numeric columns for each component.
+- `x_values`: resolved numeric X-axis values shared across the selected files.
 - `file_boundaries`: list of `(filename: str, start_time: pd.Timedelta)` pairs.
 - `components`: ordered list of column names.
 - `colors`: dict mapping component → hex color; default fallback `'#333333'` per series.
 - Context arguments derived from UI (`PlotContext`).
 
 Styling steps:
-- X data converted with `time_sec = combined_df['elapsedTime'].dt.total_seconds()`.
+- X data uses the resolved `x_values` series provided by the UI layer.
 - Each component plotted using `ax.plot(time_sec, series.fillna(0), linewidth=context.style.line_width)`.
 - Title and axis labels set to UI values (`fontsize=20`, title uses `fontweight='bold'`, `pad=20`).
 - Grid lines: `ax.yaxis.grid(True, linestyle='-', color='black', linewidth=1, alpha=1)` and identical for x-axis.
-- Legend placed with `ax.legend(loc='best')`.
+- Legend placed below the chart with `bbox_to_anchor=(0.5, -0.15)`.
 - X-limits: `(0 if no manual limit else provided, max time or manual value)`.
 - Y-limits: `(0 or provided manual bounds)`.
 - After formatting, `annotate_file_sections` called with boundary seconds.
@@ -71,7 +72,7 @@ Styling steps:
 Inputs:
 - `df_by_file`: mapping `filename -> DataFrame` indexed by `elapsedTime` (Timedelta) with numeric component columns.
 - `components`: ordered list of columns to include.
-- `mode`: `'Summe'` for sum over time, `'Mittelwert'` for mean.
+- `mode`: `'Sum'` for sum over time, `'Average'` for mean. German legacy values remain accepted for compatibility.
 - `colors`: dict component → color (fallback `'#CCCCCC'`).
 - Additional layout options from UI (label rotation, bar width, hide labels).
 
@@ -141,7 +142,7 @@ Inputs:
 
 Inputs:
 - `df`: combined dataframe with component columns.
-- `selected_elektrisch`, `selected_pneumatisch`, `productive_vars`, `mode`, `figsize`, `axis_fontsize`, `title`, `colors`, `unit`.
+- `selected_electric`, `selected_pneumatic`, `productive_vars`, `mode`, `figsize`, `axis_fontsize`, `title`, `colors`, `unit`.
 
 Derived settings:
 - Figure pixel size: `width = max(300, figsize[0] * 80)`, `height = max(300, figsize[1] * 80)`.

@@ -1,4 +1,4 @@
-"""Tab modules for the Factory-X Plotting-App."""
+"""Tab modules for the Factory-X plotting app."""
 
 from app.ui.tabs import (
     data_processing,
