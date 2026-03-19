@@ -14,7 +14,7 @@ The **Factory-X Energy Data Visualizer** is a Streamlit application for the inte
 |-----|---------|
 | **Data Processing** | Import Excel and CSV files, inspect previews, and create quick summaries of loaded datasets. |
 | **Line Plots** | Visualize electric and pneumatic power signals over time with an optional secondary axis. |
-| **Bar Charts** | Build stacked or grouped bar charts using average or sum aggregation. |
+| **Bar Charts** | Build stacked or grouped bar charts using average aggregation. |
 | **Box Plots** | Explore distributions and outliers across selected components. |
 | **Pie and Donut Charts** | Show proportional energy shares with optional target scaling and percentage or kW labels. |
 | **Scatter Plot / Histogram** | Explore correlations and distributions in the measurement data. |

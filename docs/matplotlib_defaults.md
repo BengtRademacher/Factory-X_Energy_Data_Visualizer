@@ -72,12 +72,11 @@ Styling steps:
 Inputs:
 - `df_by_file`: mapping `filename -> DataFrame` indexed by `elapsedTime` (Timedelta) with numeric component columns.
 - `components`: ordered list of columns to include.
-- `mode`: `'Sum'` for sum over time, `'Average'` for mean. German legacy values remain accepted for compatibility.
 - `colors`: dict component → color (fallback `'#CCCCCC'`).
 - Additional layout options from UI (label rotation, bar width, hide labels).
 
 Styling steps:
-- For each file, values aggregated (`sum()` or `mean()`) and stacked (running `bottom` array).
+- For each file, values aggregated using `mean()` and stacked (running `bottom` array).
 - Bars drawn via `ax.bar(indices, values, width=bar_width, bottom=bottom, edgecolor='black', linewidth=context.style.line_width, zorder=3)`.
 - Y-grid enabled before plotting, x-grid disabled.
 - X ticks set to filenames stripped of extension, rotated according to UI. Optionally hidden.
@@ -89,7 +88,7 @@ Styling steps:
 
 Same base configuration as stacked bars, with two passes:
 - Electric components drawn centered at `indices - width/2`; pneumatic at `indices + width/2`.
-- Aggregation uses same sum/mean logic.
+- Aggregation uses the mean value per file.
 - Separate running totals ensure stacked appearance within each electric/pneumatic group.
 - Axes cleanup identical to `plot_bar`.
 
@@ -142,7 +141,7 @@ Inputs:
 
 Inputs:
 - `df`: combined dataframe with component columns.
-- `selected_electric`, `selected_pneumatic`, `productive_vars`, `mode`, `figsize`, `axis_fontsize`, `title`, `colors`, `unit`.
+- `selected_electric`, `selected_pneumatic`, `productive_vars`, `figsize`, `axis_fontsize`, `title`, `colors`, `unit`.
 
 Derived settings:
 - Figure pixel size: `width = max(300, figsize[0] * 80)`, `height = max(300, figsize[1] * 80)`.

@@ -1,13 +1,27 @@
 """Sankey tab for the Factory-X plotting app."""
 
+import inspect
 from typing import Tuple
 
 import streamlit as st
 
-from app.config import DEFAULT_COLORS, PLOT_DEFAULTS, SANKEY_DEFAULTS
+from app.config import DEFAULT_COLORS, PLOT_DEFAULTS
 from app.export import export_plots
 from app.plotting import plot_sankey_energy_flow
 from app.ui.components import ColorTarget, build_color_targets, get_valid_multiselect_state, render_component_color_section
+
+
+def _plotly_chart_kwargs() -> dict:
+    """Build a Streamlit-compatible Plotly chart call without deprecated kwargs."""
+    parameters = inspect.signature(st.plotly_chart).parameters
+    kwargs: dict[str, object] = {}
+    if "config" in parameters:
+        kwargs["config"] = {}
+    if "width" in parameters:
+        kwargs["width"] = "stretch"
+    else:
+        kwargs["use_container_width"] = True
+    return kwargs
 
 
 def render(processed, options: dict) -> None:
@@ -27,11 +41,6 @@ def render(processed, options: dict) -> None:
         st.markdown("### :material/tune: Options")
 
         title = st.text_input("Title", key="sankey_title")
-
-        mode_options = ["Average", "Sum"]
-        current_mode = st.session_state.get("sankey_mode", SANKEY_DEFAULTS.mode)
-        mode_index = mode_options.index(current_mode) if current_mode in mode_options else 0
-        mode = st.selectbox("Mode", mode_options, index=mode_index, key="sankey_mode")
 
         unit = st.text_input("Unit", key="sankey_unit")
 
@@ -78,7 +87,6 @@ def render(processed, options: dict) -> None:
             selected_electric=electric,
             selected_pneumatic=pneumatic,
             productive_vars=productive,
-            mode=mode,
             figsize=_figure_size(options),
             axis_fontsize=options.get("axis_annotation_fontsize", PLOT_DEFAULTS.axis_fontsize),
             title=title,
@@ -90,7 +98,7 @@ def render(processed, options: dict) -> None:
             st.info("No data is available for the Sankey diagram.")
             return
 
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, **_plotly_chart_kwargs())
 
         if options.get("export_trigger") and options.get("export_format"):
             export_plots(

@@ -68,6 +68,7 @@ def _init_line_plot_state() -> None:
     """Initialize state for line plots."""
     defaults = {
         "line_selected_components": [],
+        "line_stacked_enabled": False,
         "line_colors": {},
         "secondary_axis_enabled": SECONDARY_AXIS_DEFAULTS.enabled,
         "secondary_axis_components": [],
@@ -87,7 +88,6 @@ def _init_bar_plot_state() -> None:
     defaults = {
         "bar_selected_components": [],
         "bar_colors": {},
-        "bar_mode": BAR_DEFAULTS.mode,
         "bar_width": BAR_DEFAULTS.bar_width,
         "bar_label_rotation": BAR_DEFAULTS.label_rotation,
         "bar_hide_x_labels": BAR_DEFAULTS.hide_x_labels,
@@ -135,9 +135,11 @@ def _init_scatter_state() -> None:
         "scatter_color": None,
         "scatter_point_size": SCATTER_DEFAULTS.point_size,
         "scatter_edge_width": SCATTER_DEFAULTS.edge_width,
-        "scatter_x_unit": SCATTER_DEFAULTS.x_unit,
-        "scatter_y_unit": SCATTER_DEFAULTS.y_unit,
+        "scatter_point_type": SCATTER_DEFAULTS.point_type,
         "scatter_color_label": SCATTER_DEFAULTS.color_label,
+        "scatter_color_min": SCATTER_DEFAULTS.color_min,
+        "scatter_color_max": SCATTER_DEFAULTS.color_max,
+        "scatter_color_tick_step": SCATTER_DEFAULTS.color_tick_step,
     }
     _set_defaults(defaults)
 
@@ -160,7 +162,6 @@ def _init_sankey_state() -> None:
         "sankey_selected_pneumatic": [],
         "sankey_productive_vars": [],
         "sankey_colors": {},
-        "sankey_mode": SANKEY_DEFAULTS.mode,
         "sankey_unit": SANKEY_DEFAULTS.unit,
         "sankey_title": SANKEY_DEFAULTS.title,
     }
@@ -207,6 +208,10 @@ def reset_ui_state() -> None:
         "scatter_x",
         "scatter_y",
         "scatter_color",
+        "scatter_point_type",
+        "scatter_color_min",
+        "scatter_color_max",
+        "scatter_color_tick_step",
         "x_source_column",
         "x_source_column_select",
         "x_source_auto_selected",

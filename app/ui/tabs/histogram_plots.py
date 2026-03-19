@@ -2,6 +2,7 @@
 
 from typing import List, Tuple
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -48,6 +49,11 @@ def render(processed, options: dict) -> None:
 
         plots_to_export: List[Tuple[str, object]] = []
         combined_df = processed.combined_frame
+        xlim = (options.get("x_min"), options.get("x_max")) if options.get("set_x_range") else None
+        ylim = (options.get("y_min"), options.get("y_max")) if options.get("set_y_range") else None
+        bin_edges = None
+        if xlim:
+            bin_edges = np.linspace(xlim[0], xlim[1], int(bins) + 1)
 
         for index, comp in enumerate(components):
             if comp not in combined_df.columns:
@@ -70,10 +76,15 @@ def render(processed, options: dict) -> None:
                 bins=bins,
                 line_width=line_width,
                 color=color,
-                x_label=comp,
-                y_label="Percent",
-                x_unit=options.get("y_unit", PLOT_DEFAULTS.y_unit),
-                y_unit="%",
+                x_label=options.get("x_axis_label", PLOT_DEFAULTS.x_label),
+                y_label=options.get("y_axis_label", PLOT_DEFAULTS.y_label),
+                xlim=xlim,
+                ylim=ylim,
+                x_unit=options.get("x_unit", PLOT_DEFAULTS.x_unit),
+                y_unit=options.get("y_unit", PLOT_DEFAULTS.y_unit),
+                x_tick_step=options.get("x_tick_step"),
+                y_tick_step=options.get("y_tick_step"),
+                bin_edges=bin_edges,
             )
 
             if fig is not None:

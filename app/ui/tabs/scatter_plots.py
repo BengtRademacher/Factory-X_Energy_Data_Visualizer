@@ -2,12 +2,23 @@
 
 from typing import Tuple
 
+import pandas as pd
 import streamlit as st
 
 from app.config import MAX_PLOT_ROWS, PLOT_DEFAULTS
 from app.export import export_plots
 from app.plotting import plot_scatter
 from app.ui.components import get_valid_selectbox_state
+
+POINT_TYPE_OPTIONS = {
+    "Circle": "o",
+    "Square": "s",
+    "Triangle Up": "^",
+    "Triangle Down": "v",
+    "Diamond": "D",
+    "Plus": "+",
+    "X": "x",
+}
 
 
 def render(processed, options: dict) -> None:
@@ -22,6 +33,7 @@ def render(processed, options: dict) -> None:
 
     main_col, custom_col = st.columns([4, 1])
     component_options = options.get("numeric_plot_columns", [])
+    combined = processed.combined_frame
 
     with custom_col:
         st.markdown("### :material/tune: Options")
@@ -45,18 +57,33 @@ def render(processed, options: dict) -> None:
         st.divider()
 
         point_size = st.number_input("Point Size", min_value=5.0, max_value=200.0, step=5.0, key="scatter_point_size")
+        point_type = st.selectbox("Point Type", options=list(POINT_TYPE_OPTIONS.keys()), key="scatter_point_type")
         edge_width = st.number_input("Edge Width", min_value=0.0, max_value=5.0, step=0.1, key="scatter_edge_width")
 
-        st.divider()
-
-        x_unit = st.text_input("X Unit", key="scatter_x_unit")
-        y_unit = st.text_input("Y Unit", key="scatter_y_unit")
-
         color_label = None
+        color_min, color_min_error = (None, False)
+        color_max, color_max_error = (None, False)
+        color_tick_step, color_tick_step_error = (None, False)
         if scatter_color and scatter_color != "-":
+            is_numeric_color = scatter_color in combined.columns and pd.api.types.is_numeric_dtype(combined[scatter_color])
             if not st.session_state.get("scatter_color_label"):
                 st.session_state["scatter_color_label"] = scatter_color
-            color_label = st.text_input("Color Legend", key="scatter_color_label")
+            if is_numeric_color:
+                st.divider()
+                st.caption("Color Legend Scale")
+                color_label = st.text_input("Color Legend", key="scatter_color_label")
+                min_col, max_col = st.columns(2)
+                color_min, color_min_error = _parse_optional_float(
+                    min_col.text_input("Color Min", key="scatter_color_min", placeholder="Auto")
+                )
+                color_max, color_max_error = _parse_optional_float(
+                    max_col.text_input("Color Max", key="scatter_color_max", placeholder="Auto")
+                )
+                color_tick_step, color_tick_step_error = _parse_optional_float(
+                    st.text_input("Color Tick Step", key="scatter_color_tick_step", placeholder="Auto")
+                )
+            else:
+                color_label = st.text_input("Color Legend", key="scatter_color_label")
 
     with main_col:
         x_col = st.session_state.get("scatter_x")
@@ -66,9 +93,18 @@ def render(processed, options: dict) -> None:
             st.info("Please select both an X and a Y component.")
             return
 
-        combined = processed.combined_frame
         if x_col not in combined.columns or y_col not in combined.columns:
             st.warning("The selected columns were not found in the data.")
+            return
+
+        if color_min_error or color_max_error or color_tick_step_error:
+            st.warning("Color Legend Scale requires valid numeric values or blank fields for Auto.")
+            return
+        if color_tick_step is not None and color_tick_step <= 0:
+            st.warning("Color Tick Step must be greater than 0.")
+            return
+        if color_min is not None and color_max is not None and color_max <= color_min:
+            st.warning("Color Max must be greater than Color Min.")
             return
 
         if len(combined) > MAX_PLOT_ROWS:
@@ -90,9 +126,19 @@ def render(processed, options: dict) -> None:
             axis_title_fontsize=options.get("axis_title_fontsize", PLOT_DEFAULTS.axis_title_fontsize),
             point_size=point_size,
             edge_width=edge_width,
-            x_unit=x_unit or None,
-            y_unit=y_unit or None,
+            marker=POINT_TYPE_OPTIONS[point_type],
+            x_label=options.get("x_axis_label", PLOT_DEFAULTS.x_label),
+            y_label=options.get("y_axis_label", PLOT_DEFAULTS.y_label),
+            x_unit=options.get("x_unit", PLOT_DEFAULTS.x_unit),
+            y_unit=options.get("y_unit", PLOT_DEFAULTS.y_unit),
             color_label=color_label or None,
+            xlim=(options.get("x_min"), options.get("x_max")) if options.get("set_x_range") else None,
+            ylim=(options.get("y_min"), options.get("y_max")) if options.get("set_y_range") else None,
+            x_tick_step=options.get("x_tick_step"),
+            y_tick_step=options.get("y_tick_step"),
+            color_min=color_min,
+            color_max=color_max,
+            color_tick_step=color_tick_step,
         )
 
         if fig is None:
@@ -117,3 +163,15 @@ def _figure_size(options: dict) -> Tuple[float, float]:
     width_mm = float(options.get("plot_width", PLOT_DEFAULTS.width))
     height_mm = float(options.get("plot_height", PLOT_DEFAULTS.height))
     return (width_mm / 25.4, height_mm / 25.4)
+
+
+def _parse_optional_float(value: str | None) -> tuple[float | None, bool]:
+    """Parse a blankable numeric input."""
+    normalized = (value or "").strip()
+    if not normalized:
+        return (None, False)
+
+    try:
+        return (float(normalized.replace(",", ".")), False)
+    except ValueError:
+        return (None, True)

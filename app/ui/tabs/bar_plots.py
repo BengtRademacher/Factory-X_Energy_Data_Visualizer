@@ -4,7 +4,7 @@ from typing import Tuple
 
 import streamlit as st
 
-from app.config import BAR_DEFAULTS, PLOT_DEFAULTS
+from app.config import PLOT_DEFAULTS
 from app.export import export_plots
 from app.plotting import plot_bar, plot_bar_evp
 from app.ui.components import build_color_targets, get_valid_multiselect_state, render_component_color_section
@@ -37,11 +37,6 @@ def render(processed, options: dict) -> None:
 
         st.divider()
 
-        aggregation_options = ["Average", "Sum"]
-        current_mode = st.session_state.get("bar_mode", BAR_DEFAULTS.mode)
-        mode_index = aggregation_options.index(current_mode) if current_mode in aggregation_options else 0
-        mode = st.selectbox("Aggregation", aggregation_options, index=mode_index, key="bar_mode")
-
         bar_width = st.slider("Bar Width", 0.05, 0.60, step=0.01, key="bar_width")
         label_rotation = st.slider("Label Rotation", 0, 90, step=5, key="bar_label_rotation")
         hide_x_labels = st.checkbox("Hide X Labels", key="bar_hide_x_labels")
@@ -66,7 +61,6 @@ def render(processed, options: dict) -> None:
                 df_by_file=processed.frames_by_file,
                 components=components,
                 title="Bar Chart",
-                mode=mode,
                 label_rotation=label_rotation,
                 colors=colors,
                 hide_x_labels=hide_x_labels,
@@ -99,7 +93,6 @@ def render(processed, options: dict) -> None:
                 elec_components=components,
                 pneu_components=compare_components,
                 title="Comparison: Group 1 vs. Group 2",
-                mode=mode,
                 label_rotation=label_rotation,
                 colors=colors,
                 hide_x_labels=hide_x_labels,

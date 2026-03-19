@@ -80,7 +80,6 @@ def _render_display_section(
         expanded=st.session_state.get("expander_display", False),
         icon=":material/palette:",
     ):
-        st.caption("Data Source")
         if x_source_columns:
             current_x_source = st.session_state.get("x_source_column")
             x_source_index = x_source_columns.index(current_x_source) if current_x_source in x_source_columns else 0
@@ -102,7 +101,6 @@ def _render_display_section(
             if x_source_error:
                 st.info(x_source_error)
 
-        st.divider()
         st.caption("Formatting")
         st.slider("Width (mm)", min_value=100, max_value=500, step=5, key="plot_width")
         st.slider("Height (mm)", min_value=50, max_value=400, step=5, key="plot_height")
@@ -124,35 +122,27 @@ def _render_display_section(
         st.divider()
         st.caption("Ranges")
 
-        st.checkbox("Set X Range", key="set_x_range")
-        if st.session_state.get("set_x_range"):
-            col1, col2 = st.columns(2)
-            x_min = col1.text_input("X Min", value=str(st.session_state.get("x_min", 0.0)), key="x_min_ui")
-            x_max = col2.text_input("X Max", value=str(st.session_state.get("x_max", x_max_default)), key="x_max_ui")
-            try:
-                st.session_state["x_min"] = float(x_min.replace(",", "."))
-                st.session_state["x_max"] = float(x_max.replace(",", "."))
-            except ValueError:
-                pass
+        x_active, x_range_valid = _render_range_expander(
+            title="Set X Range",
+            axis_key="x",
+            min_label="X Min",
+            max_label="X Max",
+            default_min=0.0,
+            default_max=x_max_default,
+        )
+        st.session_state["set_x_range"] = x_active
+        ranges_valid = ranges_valid and x_range_valid
 
-            if st.session_state.get("x_max", x_max_default) <= st.session_state.get("x_min", 0.0):
-                st.warning("X Max must be greater than X Min.")
-                ranges_valid = False
-
-        st.checkbox("Set Y Range", key="set_y_range")
-        if st.session_state.get("set_y_range"):
-            col1, col2 = st.columns(2)
-            y_min = col1.text_input("Y Min", value=str(st.session_state.get("y_min", 0.0)), key="y_min_ui")
-            y_max = col2.text_input("Y Max", value=str(st.session_state.get("y_max", y_max_default)), key="y_max_ui")
-            try:
-                st.session_state["y_min"] = float(y_min.replace(",", "."))
-                st.session_state["y_max"] = float(y_max.replace(",", "."))
-            except ValueError:
-                pass
-
-            if st.session_state.get("y_max", y_max_default) <= st.session_state.get("y_min", 0.0):
-                st.warning("Y Max must be greater than Y Min.")
-                ranges_valid = False
+        y_active, y_range_valid = _render_range_expander(
+            title="Set Y Range",
+            axis_key="y",
+            min_label="Y Min",
+            max_label="Y Max",
+            default_min=0.0,
+            default_max=y_max_default,
+        )
+        st.session_state["set_y_range"] = y_active
+        ranges_valid = ranges_valid and y_range_valid
 
         col1, col2 = st.columns(2)
         x_step = col1.text_input(
@@ -172,6 +162,73 @@ def _render_display_section(
             pass
 
     return ranges_valid
+
+
+def _render_range_expander(
+    *,
+    title: str,
+    axis_key: str,
+    min_label: str,
+    max_label: str,
+    default_min: float,
+    default_max: float,
+) -> tuple[bool, bool]:
+    """Render a manual range section and return (active, valid)."""
+    min_ui_key = f"{axis_key}_min_ui"
+    max_ui_key = f"{axis_key}_max_ui"
+    min_state_key = f"{axis_key}_min"
+    max_state_key = f"{axis_key}_max"
+
+    if min_ui_key not in st.session_state:
+        st.session_state[min_ui_key] = str(st.session_state.get(min_state_key, default_min)) if st.session_state.get(
+            f"set_{axis_key}_range",
+            False,
+        ) else ""
+    if max_ui_key not in st.session_state:
+        st.session_state[max_ui_key] = str(st.session_state.get(max_state_key, default_max)) if st.session_state.get(
+            f"set_{axis_key}_range",
+            False,
+        ) else ""
+
+    current_min = (st.session_state.get(min_ui_key, "") or "").strip()
+    current_max = (st.session_state.get(max_ui_key, "") or "").strip()
+    expanded = bool(current_min or current_max)
+
+    with st.expander(title, expanded=expanded):
+        col1, col2 = st.columns(2)
+        min_text = col1.text_input(min_label, key=min_ui_key, placeholder="Auto")
+        max_text = col2.text_input(max_label, key=max_ui_key, placeholder="Auto")
+
+    parsed_min, min_error = _parse_optional_float(min_text)
+    parsed_max, max_error = _parse_optional_float(max_text)
+
+    if min_error or max_error:
+        st.warning(f"{title} requires valid numeric values or blank fields for Auto.")
+        return (False, False)
+
+    if parsed_min is None or parsed_max is None:
+        return (False, True)
+
+    st.session_state[min_state_key] = parsed_min
+    st.session_state[max_state_key] = parsed_max
+
+    if parsed_max <= parsed_min:
+        st.warning(f"{max_label} must be greater than {min_label}.")
+        return (False, False)
+
+    return (True, True)
+
+
+def _parse_optional_float(value: str | None) -> tuple[float | None, bool]:
+    """Parse a text input into an optional float."""
+    normalized = (value or "").strip()
+    if not normalized:
+        return (None, False)
+
+    try:
+        return (float(normalized.replace(",", ".")), False)
+    except ValueError:
+        return (None, True)
 
 
 def _sync_x_source_state(x_source_columns: list[str]) -> str | None:

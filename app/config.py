@@ -74,7 +74,6 @@ class BarPlotDefaults:
     """Default values for bar charts."""
 
     bar_width: float = 0.25
-    mode: str = "Average"
     hide_x_labels: bool = False
     label_rotation: int = 45
 
@@ -106,9 +105,11 @@ class ScatterDefaults:
 
     point_size: float = 30.0
     edge_width: float = 0.5
-    x_unit: str = ""
-    y_unit: str = ""
+    point_type: str = "Circle"
     color_label: str = ""
+    color_min: str = ""
+    color_max: str = ""
+    color_tick_step: str = ""
 
 
 @dataclass
@@ -123,7 +124,6 @@ class HistogramDefaults:
 class SankeyDefaults:
     """Default values for Sankey charts."""
 
-    mode: str = "Average"
     unit: str = "W"
     title: str = "Sankey Diagram"
 

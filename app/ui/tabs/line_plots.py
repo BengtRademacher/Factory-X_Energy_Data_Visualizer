@@ -39,6 +39,7 @@ def render(processed, options: dict) -> None:
         )
 
         colors = render_component_color_section("line", build_color_targets(components))
+        st.checkbox("Stacked Plots", key="line_stacked_enabled")
 
         st.divider()
         secondary_args = _render_secondary_axis(component_options)
@@ -88,6 +89,7 @@ def render(processed, options: dict) -> None:
             y_tick_step=options.get("y_tick_step"),
             x_label=options.get("x_axis_label", PLOT_DEFAULTS.x_label),
             y_label=options.get("y_axis_label", PLOT_DEFAULTS.y_label),
+            stacked=st.session_state.get("line_stacked_enabled", False),
             **secondary_args,
         )
 
@@ -130,13 +132,43 @@ def _render_secondary_axis(component_options: list[str]) -> dict:
 
         st.text_input("Secondary Label", key="secondary_axis_label")
         st.text_input("Secondary Unit", key="secondary_axis_unit")
-        st.number_input("Secondary Tick Step", min_value=0.0, key="secondary_axis_tick_step")
+        secondary_tick_step, secondary_tick_step_error = _parse_required_float(
+            st.text_input(
+                "Secondary Tick Step",
+                value=_format_float_input(st.session_state.get("secondary_axis_tick_step")),
+                key="secondary_axis_tick_step_ui",
+            )
+        )
+        if secondary_tick_step_error:
+            st.warning("Secondary Tick Step must be a valid number.")
+            secondary_tick_step = None
+        elif secondary_tick_step <= 0:
+            st.warning("Secondary Tick Step must be greater than 0.")
+            secondary_tick_step = None
+        else:
+            st.session_state["secondary_axis_tick_step"] = secondary_tick_step
 
         st.caption("Range")
         col1, col2 = st.columns(2)
-        sec_min = col1.number_input("Secondary Min", key="secondary_axis_min")
-        sec_max = col2.number_input("Secondary Max", key="secondary_axis_max")
-        if sec_max > sec_min:
+        sec_min, sec_min_error = _parse_required_float(
+            col1.text_input(
+                "Secondary Min",
+                value=_format_float_input(st.session_state.get("secondary_axis_min")),
+                key="secondary_axis_min_ui",
+            )
+        )
+        sec_max, sec_max_error = _parse_required_float(
+            col2.text_input(
+                "Secondary Max",
+                value=_format_float_input(st.session_state.get("secondary_axis_max")),
+                key="secondary_axis_max_ui",
+            )
+        )
+        if sec_min_error or sec_max_error:
+            st.warning("Secondary range requires valid numbers.")
+        elif sec_max > sec_min:
+            st.session_state["secondary_axis_min"] = sec_min
+            st.session_state["secondary_axis_max"] = sec_max
             secondary_ylim = (sec_min, sec_max)
         else:
             st.warning("Secondary Max must be greater than Secondary Min.")
@@ -146,7 +178,7 @@ def _render_secondary_axis(component_options: list[str]) -> dict:
         "secondary_colors": secondary_colors,
         "secondary_y_unit": st.session_state.get("secondary_axis_unit", ""),
         "secondary_y_label": st.session_state.get("secondary_axis_label", "Secondary value"),
-        "secondary_y_tick_step": st.session_state.get("secondary_axis_tick_step"),
+        "secondary_y_tick_step": secondary_tick_step,
         "secondary_ylim": secondary_ylim,
     }
 
@@ -156,3 +188,24 @@ def _figure_size(options: dict) -> Tuple[float, float]:
     width_mm = float(options.get("plot_width", PLOT_DEFAULTS.width))
     height_mm = float(options.get("plot_height", PLOT_DEFAULTS.height))
     return (width_mm / 25.4, height_mm / 25.4)
+
+
+def _parse_required_float(value: str | None) -> tuple[float | None, bool]:
+    """Parse a required numeric input."""
+    normalized = (value or "").strip()
+    if not normalized:
+        return (None, True)
+
+    try:
+        return (float(normalized.replace(",", ".")), False)
+    except ValueError:
+        return (None, True)
+
+
+def _format_float_input(value: object) -> str:
+    """Format numeric state values for plain text inputs."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f"{value:g}".replace(".", ",")
+    if value is None:
+        return ""
+    return str(value)

@@ -12,11 +12,6 @@ plt.rcParams["font.family"] = ["Aptos", "Segoe UI", "sans-serif"]
 plt.rcParams["font.sans-serif"] = ["Aptos", "Segoe UI", "Arial", "sans-serif"]
 
 
-def _is_sum_mode(mode: str | None) -> bool:
-    normalized = (mode or "").strip().lower()
-    return normalized in {"sum", "summe"}
-
-
 def format_axis_with_unit(
     axis_obj,
     unit_str,
@@ -111,6 +106,7 @@ def plot_line(
     y_tick_step=None,
     x_label="Time t",
     y_label="Power P",
+    stacked=False,
     secondary_components=None,
     secondary_colors=None,
     secondary_y_unit=None,
@@ -128,17 +124,44 @@ def plot_line(
 
     legend_handles = []
     legend_labels = []
+    plotted_series = []
+    cumulative_values = np.zeros(len(combined_df), dtype=float)
     for component in components:
-        if component in combined_df.columns:
-            line = ax.plot(
+        if component not in combined_df.columns:
+            continue
+
+        component_values = pd.to_numeric(combined_df[component], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+        if stacked:
+            cumulative_values = cumulative_values + component_values
+            plotted_values = cumulative_values.copy()
+        else:
+            plotted_values = component_values
+
+        plotted_series.append((component, plotted_values))
+
+    if stacked:
+        for component, plotted_values in reversed(plotted_series):
+            ax.fill_between(
                 time_sec,
-                combined_df[component].fillna(0),
-                label=component,
+                0,
+                plotted_values,
                 color=colors.get(component, "#333333"),
-                linewidth=line_width,
+                linewidth=0,
+                alpha=1.0,
+                zorder=1,
             )
-            legend_handles.extend(line)
-            legend_labels.append(component)
+
+    for component, plotted_values in plotted_series:
+        line = ax.plot(
+            time_sec,
+            plotted_values,
+            label=component,
+            color=colors.get(component, "#333333"),
+            linewidth=line_width,
+            zorder=3,
+        )
+        legend_handles.extend(line)
+        legend_labels.append(component)
 
     ax.set_title(title, fontsize=20, fontweight="bold", pad=20)
     ax.set_xlabel(x_label, fontsize=axis_title_fontsize)
@@ -251,9 +274,19 @@ def plot_scatter(
     axis_title_fontsize: int,
     point_size: float,
     edge_width: float,
+    marker: str,
+    x_label: str,
+    y_label: str,
     x_unit: str | None,
     y_unit: str | None,
     color_label: str | None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    x_tick_step: float | None = None,
+    y_tick_step: float | None = None,
+    color_min: float | None = None,
+    color_max: float | None = None,
+    color_tick_step: float | None = None,
 ):
     if df.empty or x_col not in df or y_col not in df:
         return None
@@ -274,18 +307,29 @@ def plot_scatter(
         "linewidth": edge_width,
         "alpha": 0.85,
         "edgecolors": "black" if edge_width > 0 else "none",
+        "marker": marker,
     }
 
     if color_series is not None:
         if pd.api.types.is_numeric_dtype(color_series):
-            sc = ax.scatter(x, y, c=color_series, cmap="viridis", **scatter_kwargs)
+            scatter_norm = {}
+            if color_min is not None:
+                scatter_norm["vmin"] = color_min
+            if color_max is not None:
+                scatter_norm["vmax"] = color_max
+
+            sc = ax.scatter(x, y, c=color_series, cmap="viridis", **scatter_kwargs, **scatter_norm)
             cbar = fig.colorbar(sc, ax=ax, pad=0.01)
             cbar.set_label(color_label or color_col, fontsize=axis_title_fontsize)
 
-            cmin, cmax = float(color_series.min()), float(color_series.max())
-            tick_locs = cbar.ax.get_yticks()
-            tick_locs = tick_locs[(tick_locs > cmin) & (tick_locs < cmax)]
-            tick_locs = np.sort(np.unique(np.concatenate(([cmin], tick_locs, [cmax]))))
+            cmin = float(color_min) if color_min is not None else float(color_series.min())
+            cmax = float(color_max) if color_max is not None else float(color_series.max())
+            if color_tick_step is not None and color_tick_step > 0:
+                tick_locs = _build_even_ticks(cmin, cmax, color_tick_step)
+            else:
+                tick_locs = cbar.ax.get_yticks()
+                tick_locs = tick_locs[(tick_locs > cmin) & (tick_locs < cmax)]
+                tick_locs = np.sort(np.unique(np.concatenate(([cmin], tick_locs, [cmax]))))
             cbar.ax.set_yticks(tick_locs)
             cbar.ax.tick_params(labelsize=axis_fontsize, length=0)
             cbar.outline.set_linewidth(1.5)
@@ -302,16 +346,39 @@ def plot_scatter(
     else:
         ax.scatter(x, y, color="#4B5BA9", **scatter_kwargs)
 
-    ax.set_xlabel(x_col if x_unit is None else f"{x_col} [{x_unit}]", fontsize=axis_title_fontsize)
-    ax.set_ylabel(y_col if y_unit is None else f"{y_col} [{y_unit}]", fontsize=axis_title_fontsize)
+    ax.set_xlabel(_format_label_with_unit(x_label, x_unit), fontsize=axis_title_fontsize)
+    ax.set_ylabel(_format_label_with_unit(y_label, y_unit), fontsize=axis_title_fontsize)
     ax.set_title(f"Scatter - {x_col} vs. {y_col}", fontsize=20, fontweight="bold", pad=20)
     ax.tick_params(axis="both", which="major", labelsize=axis_fontsize, length=0)
     ax.grid(True, linestyle="-", color="black", linewidth=1, alpha=1)
 
-    x_min, x_max = float(x.min()), float(x.max())
-    y_min, y_max = float(y.min()), float(y.max())
-    format_axis_with_unit(ax.xaxis, x_unit or "", axis_fontsize, min_value=x_min, max_value=x_max, thousands_for_ints=True)
-    format_axis_with_unit(ax.yaxis, y_unit or "", axis_fontsize, min_value=y_min, max_value=y_max, thousands_for_ints=True)
+    if xlim:
+        ax.set_xlim(left=xlim[0], right=xlim[1])
+    if ylim:
+        ax.set_ylim(bottom=ylim[0], top=ylim[1])
+
+    x_min, x_max = ax.get_xlim() if xlim else (float(x.min()), float(x.max()))
+    y_min, y_max = ax.get_ylim() if ylim else (float(y.min()), float(y.max()))
+    format_axis_with_unit(
+        ax.xaxis,
+        x_unit or "",
+        axis_fontsize,
+        min_value=x_min,
+        max_value=x_max,
+        tick_step=x_tick_step,
+        thousands_for_ints=True,
+    )
+    format_axis_with_unit(
+        ax.yaxis,
+        y_unit or "",
+        axis_fontsize,
+        min_value=y_min,
+        max_value=y_max,
+        tick_step=y_tick_step,
+        thousands_for_ints=True,
+    )
+    ax.set_xlim(left=x_min, right=x_max)
+    ax.set_ylim(bottom=y_min, top=y_max)
 
     for spine in ax.spines.values():
         spine.set_linewidth(1.5)
@@ -391,7 +458,6 @@ def plot_bar(
     df_by_file,
     components,
     title,
-    mode,
     label_rotation,
     colors,
     hide_x_labels,
@@ -416,7 +482,7 @@ def plot_bar(
     for _, df in df_by_file.items():
         for component in components:
             series = pd.to_numeric(df[component], errors="coerce") if component in df else pd.Series(dtype=float)
-            value = float(series.sum()) if _is_sum_mode(mode) else float(series.mean())
+            value = float(series.mean())
             component_values[component].append(value if not np.isnan(value) else 0.0)
 
     n_files = len(file_labels)
@@ -488,7 +554,6 @@ def plot_bar_evp(
     elec_components,
     pneu_components,
     title,
-    mode,
     label_rotation,
     colors,
     hide_x_labels,
@@ -519,7 +584,7 @@ def plot_bar_evp(
         values = []
         for df in df_by_file.values():
             series = pd.to_numeric(df[component], errors="coerce") if component in df else pd.Series(dtype=float)
-            value = float(series.sum()) if _is_sum_mode(mode) else float(series.mean())
+            value = float(series.mean())
             values.append(value if not np.isnan(value) else 0.0)
 
         ax.bar(
@@ -540,7 +605,7 @@ def plot_bar_evp(
         values = []
         for df in df_by_file.values():
             series = pd.to_numeric(df[component], errors="coerce") if component in df else pd.Series(dtype=float)
-            value = float(series.sum()) if _is_sum_mode(mode) else float(series.mean())
+            value = float(series.mean())
             values.append(value if not np.isnan(value) else 0.0)
 
         ax.bar(
@@ -726,6 +791,7 @@ def plot_histogram(
     y_unit: str | None = None,
     y_tick_step: float | None = None,
     x_tick_step: float | None = None,
+    bin_edges: np.ndarray | None = None,
 ):
     if series.empty:
         return None
@@ -735,12 +801,15 @@ def plot_histogram(
     ax.xaxis.grid(False)
 
     values = pd.to_numeric(series, errors="coerce").dropna().values
+    if bin_edges is not None and len(bin_edges) >= 2:
+        values = values[(values >= float(bin_edges[0])) & (values <= float(bin_edges[-1]))]
     n = len(values)
+    hist_bins = bin_edges if bin_edges is not None else bins
     if n > 0:
         weights = np.ones(n) * (100.0 / n)
-        ax.hist(values, bins=bins, color=color, edgecolor="black", linewidth=line_width, weights=weights, zorder=3)
+        ax.hist(values, bins=hist_bins, color=color, edgecolor="black", linewidth=line_width, weights=weights, zorder=3)
     else:
-        ax.hist(values, bins=bins, color=color, edgecolor="black", linewidth=line_width, zorder=3)
+        ax.hist(values, bins=hist_bins, color=color, edgecolor="black", linewidth=line_width, zorder=3)
 
     ax.set_title(title, fontsize=20, fontweight="bold", pad=20)
     ax.set_xlabel(x_label, fontsize=axis_title_fontsize)
@@ -768,6 +837,24 @@ def plot_histogram(
     ax.autoscale(enable=False)
     fig.tight_layout()
     return fig
+
+
+def _format_label_with_unit(label: str, unit: str | None) -> str:
+    if unit:
+        return f"{label} [{unit}]"
+    return label
+
+
+def _build_even_ticks(min_value: float, max_value: float, step: float) -> np.ndarray:
+    if step <= 0:
+        return np.array([min_value, max_value])
+
+    ticks = np.arange(min_value, max_value + step, step)
+    if len(ticks) == 0 or not np.isclose(ticks[-1], max_value):
+        ticks = np.append(ticks, max_value)
+    if not np.isclose(ticks[0], min_value):
+        ticks = np.insert(ticks, 0, min_value)
+    return np.sort(np.unique(ticks))
 
 
 def _unit_to_kw_factor(unit: str | None) -> float:
@@ -910,7 +997,6 @@ def plot_sankey_energy_flow(
     selected_electric: list,
     selected_pneumatic: list,
     productive_vars: list,
-    mode: str,
     figsize: tuple,
     axis_fontsize: int,
     title: str = "Sankey Diagram: Total Power -> Electric/Pneumatic -> Productive/Unproductive",
@@ -930,7 +1016,7 @@ def plot_sankey_energy_flow(
         numeric = pd.to_numeric(series, errors="coerce").dropna()
         if numeric.empty:
             return 0.0
-        return float(numeric.sum()) if _is_sum_mode(mode) else float(numeric.mean())
+        return float(numeric.mean())
 
     def hex_to_rgba(color_hex: str, alpha: float = 0.6) -> str:
         try:
