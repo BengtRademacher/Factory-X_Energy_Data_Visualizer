@@ -19,7 +19,11 @@ def render(processed, options: dict) -> None:
     if not ensure_has_data(processed, "Please upload files to create charts."):
         return
 
-    if not ensure_valid_ranges(options):
+    if not ensure_valid_ranges(
+        options,
+        "Invalid axis ranges. Please ensure Y Min < Y Max.",
+        x_axis_relevant=False,
+    ):
         return
 
     main_col, custom_col = st.columns([4, 1])
@@ -47,6 +51,7 @@ def render(processed, options: dict) -> None:
             st.info("Please select at least one component.")
             return
 
+        ylim = (options.get("y_min"), options.get("y_max")) if options.get("set_y_range") else None
         fig = plot_boxplot(
             df_by_file=processed.frames_by_file,
             components=components,
@@ -57,7 +62,7 @@ def render(processed, options: dict) -> None:
             colors=colors,
             line_width=options.get("line_width", PLOT_DEFAULTS.line_width),
             label_rotation=label_rotation,
-            ylim=None,
+            ylim=ylim,
             y_unit=options.get("y_unit", PLOT_DEFAULTS.y_unit),
             legend_inside=False,
             y_tick_step=options.get("y_tick_step"),

@@ -383,6 +383,181 @@ def plot_sum(
     return fig
 
 
+def _short_file_label(file_name: str) -> str:
+    return file_name.rsplit(".", 1)[0]
+
+
+def _coerce_component_frame(frame: pd.DataFrame, components: list[str]) -> pd.DataFrame:
+    if frame is None:
+        return pd.DataFrame(columns=components)
+
+    component_data: dict[str, pd.Series] = {}
+    row_count = len(frame)
+    for component in components:
+        if component in frame.columns:
+            component_data[component] = pd.to_numeric(frame[component], errors="coerce").fillna(0.0).reset_index(drop=True)
+        else:
+            component_data[component] = pd.Series(np.zeros(row_count, dtype=float))
+
+    return pd.DataFrame(component_data)
+
+
+def _format_bar_label_value(value: object) -> str:
+    if isinstance(value, pd.Timedelta):
+        value = value.total_seconds()
+
+    if isinstance(value, pd.Timestamp):
+        if value.microsecond:
+            return value.isoformat(sep=" ", timespec="milliseconds")
+        return value.isoformat(sep=" ", timespec="seconds")
+
+    if pd.isna(value):
+        return ""
+
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        numeric_value = float(value)
+        rounded_value = round(numeric_value)
+        if np.isclose(numeric_value, rounded_value):
+            return str(int(rounded_value))
+        return f"{numeric_value:.2f}".rstrip("0").rstrip(".")
+
+    return str(value)
+
+
+def _resolve_bar_row_labels(frame: pd.DataFrame, x_source_column: str | None) -> list[str]:
+    label_source: pd.Series | None = None
+    normalize_source = False
+
+    if x_source_column:
+        if x_source_column in frame.columns:
+            label_source = frame[x_source_column].reset_index(drop=True)
+        elif frame.index.name == x_source_column:
+            label_source = pd.Series(frame.index, name=x_source_column)
+            normalize_source = True
+
+    if label_source is None:
+        if isinstance(frame.index, pd.TimedeltaIndex) or frame.index.name == "elapsedTime":
+            label_source = pd.Series(frame.index, name=frame.index.name or "elapsedTime")
+            normalize_source = True
+        elif "elapsedTime" in frame.columns:
+            label_source = frame["elapsedTime"].reset_index(drop=True)
+            normalize_source = True
+
+    if label_source is None:
+        return [f"Row {index + 1}" for index in range(len(frame))]
+
+    values = label_source.reset_index(drop=True)
+    if normalize_source and not values.empty:
+        if pd.api.types.is_timedelta64_dtype(values):
+            values = values - values.iloc[0]
+        elif pd.api.types.is_datetime64_any_dtype(values):
+            values = values - values.iloc[0]
+        elif pd.api.types.is_numeric_dtype(values):
+            numeric_values = pd.to_numeric(values, errors="coerce")
+            if numeric_values.notna().all():
+                values = numeric_values - float(numeric_values.iloc[0])
+
+    labels: list[str] = []
+    for index, value in enumerate(values.tolist()):
+        formatted_value = _format_bar_label_value(value)
+        labels.append(formatted_value or f"Row {index + 1}")
+    return labels
+
+
+def _component_values_from_means(
+    df_by_file: dict[str, pd.DataFrame],
+    components: list[str],
+    per_file_means: pd.DataFrame | None,
+) -> dict[str, dict[str, float]]:
+    if per_file_means is None or per_file_means.empty:
+        component_values: dict[str, dict[str, float]] = {}
+        for file_name, frame in df_by_file.items():
+            component_values[file_name] = {}
+            for component in components:
+                series = pd.to_numeric(frame[component], errors="coerce") if component in frame else pd.Series(dtype=float)
+                mean_value = float(series.mean()) if not series.empty else 0.0
+                component_values[file_name][component] = mean_value if not np.isnan(mean_value) else 0.0
+        return component_values
+
+    aligned_means = per_file_means.reindex(df_by_file.keys())
+    return {
+        file_name: {
+            component: float(aligned_means.get(component, pd.Series(0.0, index=aligned_means.index)).fillna(0.0).get(file_name, 0.0))
+            for component in components
+        }
+        for file_name in df_by_file.keys()
+    }
+
+
+def _build_bar_groups(
+    df_by_file: dict[str, pd.DataFrame],
+    components: list[str],
+    aggregation_mode: str,
+    per_file_means: pd.DataFrame | None,
+    x_source_column: str | None,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    file_spans: list[dict[str, object]] = []
+
+    if aggregation_mode != "Seperate Bars":
+        component_values = _component_values_from_means(df_by_file, components, per_file_means)
+        groups = [
+            {
+                "tick_label": _short_file_label(file_name),
+                "file_label": _short_file_label(file_name),
+                "values": component_values[file_name],
+            }
+            for file_name in df_by_file.keys()
+        ]
+        file_spans = [
+            {"label": _short_file_label(file_name), "start": index, "end": index}
+            for index, file_name in enumerate(df_by_file.keys())
+        ]
+        return groups, file_spans
+
+    groups: list[dict[str, object]] = []
+    for file_name, frame in df_by_file.items():
+        numeric_frame = _coerce_component_frame(frame, components)
+        row_labels = _resolve_bar_row_labels(frame, x_source_column)
+        start_index = len(groups)
+
+        for row_index, row in numeric_frame.iterrows():
+            groups.append(
+                {
+                    "tick_label": row_labels[row_index] if row_index < len(row_labels) else f"Row {row_index + 1}",
+                    "file_label": _short_file_label(file_name),
+                    "values": {component: float(row.get(component, 0.0)) for component in components},
+                }
+            )
+
+        if len(groups) > start_index:
+            file_spans.append(
+                {
+                    "label": _short_file_label(file_name),
+                    "start": start_index,
+                    "end": len(groups) - 1,
+                }
+            )
+
+    return groups, file_spans
+
+
+def _apply_bar_file_axis(
+    ax,
+    file_spans: list[dict[str, object]],
+    group_centers: list[float],
+    axis_fontsize: int,
+) -> None:
+    file_axis = ax.secondary_xaxis("top")
+    file_centers = [
+        float(np.mean(group_centers[int(span["start"]): int(span["end"]) + 1]))
+        for span in file_spans
+    ]
+    file_labels = [str(span["label"]) for span in file_spans]
+    file_axis.set_xticks(file_centers)
+    file_axis.set_xticklabels(file_labels)
+    file_axis.tick_params(axis="x", labelsize=axis_fontsize, length=0, pad=6)
+
+
 def plot_bar(
     df_by_file,
     components,
@@ -401,83 +576,191 @@ def plot_bar(
     y_label="Power P",
     x_label="",
     per_file_means: pd.DataFrame | None = None,
+    stacked: bool = True,
+    aggregation_mode: str = "Mean",
+    x_source_column: str | None = None,
 ):
     if not components or not df_by_file:
         return None
 
     fig, ax = plt.subplots(figsize=figsize)
-    file_labels = [name.split(".")[0] for name in df_by_file.keys()]
-    n_files = len(file_labels)
-    indices = np.arange(n_files)
-    bottom = np.zeros(n_files)
-
-    if per_file_means is None or per_file_means.empty:
-        component_values = {component: [] for component in components}
-        for _, df in df_by_file.items():
-            for component in components:
-                series = pd.to_numeric(df[component], errors="coerce") if component in df else pd.Series(dtype=float)
-                value = float(series.mean())
-                component_values[component].append(value if not np.isnan(value) else 0.0)
-    else:
-        aligned_means = per_file_means.reindex(df_by_file.keys())
-        component_values = {
-            component: aligned_means.get(component, pd.Series(0.0, index=aligned_means.index)).fillna(0.0).to_numpy(dtype=float)
-            for component in components
-        }
+    bar_width_value = float(bar_width)
+    aggregation_mode = aggregation_mode or "Mean"
+    file_names = list(df_by_file.keys())
+    outer_pad = 0.45
 
     ax.yaxis.grid(True, linestyle="-", color="black", linewidth=1, alpha=1, zorder=0)
 
-    for component in components:
-        values = np.array(component_values[component], dtype=float)
-        ax.bar(
-            indices,
-            values,
-            width=float(bar_width),
-            label=component,
-            bottom=bottom,
-            color=colors.get(component, "#CCCCCC"),
-            edgecolor="black",
-            linewidth=line_width,
-            zorder=3,
+    if aggregation_mode == "Mean" and not stacked and len(file_names) == 1:
+        component_values = _component_values_from_means(df_by_file, components, per_file_means)
+        file_values = component_values[file_names[0]]
+        positions = np.arange(len(components), dtype=float) * bar_width_value
+        heights = np.array([float(file_values.get(component, 0.0)) for component in components], dtype=float)
+
+        for index, component in enumerate(components):
+            ax.bar(
+                positions[index],
+                heights[index],
+                width=bar_width_value,
+                label=component,
+                color=colors.get(component, "#CCCCCC"),
+                edgecolor="black",
+                linewidth=line_width,
+                zorder=3,
+            )
+
+        ax.set_xticks(positions)
+        ax.set_xticklabels(components, rotation=label_rotation, ha="right" if label_rotation > 0 else "center")
+        if len(positions):
+            ax.set_xlim(
+                positions[0] - bar_width_value / 2.0 - outer_pad,
+                positions[-1] + bar_width_value / 2.0 + outer_pad,
+            )
+        else:
+            ax.set_xlim(-0.5, 0.5)
+        max_y = float(heights.max()) if len(heights) else 0.0
+    else:
+        groups, file_spans = _build_bar_groups(
+            df_by_file=df_by_file,
+            components=components,
+            aggregation_mode=aggregation_mode,
+            per_file_means=per_file_means,
+            x_source_column=x_source_column,
         )
-        bottom += values
+        if not groups:
+            plt.close(fig)
+            return None
+
+        file_boundaries = {int(span["end"]) for span in file_spans[:-1]}
+        group_centers: list[float] = []
+        group_left_edges: list[float] = []
+        group_right_edges: list[float] = []
+
+        if stacked:
+            positions: list[float] = []
+            current_position = 0.0
+            group_gap = 1.0
+            file_gap = 0.6 if aggregation_mode == "Seperate Bars" and len(file_spans) > 1 else 0.0
+            for index, group in enumerate(groups):
+                positions.append(current_position)
+                group_centers.append(current_position)
+                group_left_edges.append(current_position - bar_width_value / 2.0)
+                group_right_edges.append(current_position + bar_width_value / 2.0)
+                current_position += group_gap
+                if index in file_boundaries:
+                    current_position += file_gap
+
+            bottom = np.zeros(len(groups), dtype=float)
+            for component in components:
+                values = np.array([float(group["values"].get(component, 0.0)) for group in groups], dtype=float)
+                ax.bar(
+                    positions,
+                    values,
+                    width=bar_width_value,
+                    label=component,
+                    bottom=bottom,
+                    color=colors.get(component, "#CCCCCC"),
+                    edgecolor="black",
+                    linewidth=line_width,
+                    zorder=3,
+                )
+                bottom += values
+
+            ax.set_xticks(positions)
+            ax.set_xticklabels(
+                [str(group["tick_label"]) for group in groups],
+                rotation=label_rotation,
+                ha="right" if label_rotation > 0 else "center",
+            )
+            max_y = float(bottom.max()) if len(bottom) else 0.0
+        else:
+            current_left = 0.0
+            component_positions: dict[str, list[float]] = {component: [] for component in components}
+            component_values: dict[str, list[float]] = {component: [] for component in components}
+            group_gap = 0.0 if aggregation_mode == "Mean" else 0.25
+            file_gap = (0.65 if aggregation_mode == "Mean" else 0.55) if len(file_spans) > 1 else 0.0
+            group_width = len(components) * bar_width_value
+            all_values: list[float] = []
+
+            for index, group in enumerate(groups):
+                group_left = current_left
+                group_right = group_left + group_width
+                group_left_edges.append(group_left)
+                group_right_edges.append(group_right)
+                group_center = group_left + group_width / 2.0
+                group_centers.append(group_center)
+
+                for component_index, component in enumerate(components):
+                    component_positions[component].append(group_left + (component_index + 0.5) * bar_width_value)
+                    component_value = float(group["values"].get(component, 0.0))
+                    component_values[component].append(component_value)
+                    all_values.append(component_value)
+
+                current_left = group_right + group_gap
+                if index in file_boundaries:
+                    current_left += file_gap
+
+            for component in components:
+                ax.bar(
+                    component_positions[component],
+                    component_values[component],
+                    width=bar_width_value,
+                    label=component,
+                    color=colors.get(component, "#CCCCCC"),
+                    edgecolor="black",
+                    linewidth=line_width,
+                    zorder=3,
+                )
+
+            ax.set_xticks(group_centers)
+            ax.set_xticklabels(
+                [str(group["tick_label"]) for group in groups],
+                rotation=label_rotation,
+                ha="right" if label_rotation > 0 else "center",
+            )
+            max_y = max(all_values) if all_values else 0.0
+
+        if aggregation_mode == "Seperate Bars" and len(file_spans) > 1:
+            for span in file_spans[:-1]:
+                right_edge = group_right_edges[int(span["end"])]
+                next_left = group_left_edges[int(span["end"]) + 1]
+                ax.axvline(x=(right_edge + next_left) / 2.0, linestyle="--", color="grey", linewidth=1, zorder=1)
+
+            if not hide_x_labels:
+                _apply_bar_file_axis(ax, file_spans, group_centers, axis_fontsize)
+
+        if group_left_edges and group_right_edges:
+            ax.set_xlim(group_left_edges[0] - outer_pad, group_right_edges[-1] + outer_pad)
+        else:
+            ax.set_xlim(-0.5, 0.5)
 
     ax.set_title(title, fontsize=20, fontweight="bold", pad=20)
     ax.set_ylabel(y_label, fontsize=axis_title_fontsize)
     ax.set_xlabel(x_label, fontsize=axis_title_fontsize)
     ax.tick_params(axis="y", labelsize=axis_fontsize, length=0)
-    ax.set_xticks(indices)
-    ax.set_xticklabels(file_labels, rotation=label_rotation, ha="right" if label_rotation > 0 else "center")
+    ax.tick_params(axis="x", length=0, labelsize=axis_fontsize)
+
     if hide_x_labels:
         ax.set_xticklabels([])
         ax.set_xlabel("")
-    ax.tick_params(axis="x", length=0)
+
     ax.legend(loc="best")
 
     if ylim:
         y_bottom, y_top = ylim
         ax.set_ylim(bottom=y_bottom, top=y_top)
     else:
-        max_y = bottom.max() if n_files else 0
         y_bottom = 0
         ax.set_ylim(bottom=0, top=max_y * 1.1 if max_y > 0 else 1)
-
-    if n_files:
-        width = float(bar_width)
-        left_edge = indices[0] - width / 2.0
-        right_edge = indices[-1] + width / 2.0
-        pad = 0.6 * width
-        ax.set_xlim(left=left_edge - pad, right=right_edge + pad)
-    else:
-        ax.set_xlim(-0.5, 0.5)
 
     ax.margins(x=0, y=0)
     _, y_max = ax.get_ylim()
     format_axis_with_unit(ax.yaxis, y_unit, axis_fontsize, min_value=y_bottom, max_value=y_max, tick_step=y_tick_step)
-    ax.set_ylim(bottom=y_bottom, top=ax.get_ylim()[1])
+    ax.set_ylim(bottom=y_bottom, top=(y_top if ylim else ax.get_ylim()[1]))
 
     for spine in ax.spines.values():
         spine.set_linewidth(1.5)
+
     ax.set_xmargin(0)
     ax.set_ymargin(0)
     ax.autoscale(enable=False)
@@ -928,4 +1211,3 @@ def plot_donut(
 
     fig.tight_layout()
     return fig
-

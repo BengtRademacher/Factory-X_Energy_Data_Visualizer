@@ -47,6 +47,8 @@ def test_render_sidebar(mock_warning, mock_expander, mock_sidebar):
     assert options["numeric_plot_columns"] == ["power"]
     assert options["x_source_columns"] == ["elapsedTime", "power", "status"]
     assert options["x_source_column"] == "elapsedTime"
+    assert options["x_range_valid"] is True
+    assert options["y_range_valid"] is True
     assert st.session_state["x_source_auto_selected"] is True
     assert "component_aliases" not in options
     assert "time_column_name" not in options
@@ -66,6 +68,10 @@ def test_initialize_state():
     assert st.session_state["x_source_column"] is None
     assert st.session_state["x_source_auto_selected"] is False
     assert st.session_state["line_stacked_enabled"] is False
+    assert st.session_state["bar_unstacked_enabled"] is False
+    assert st.session_state["bar_aggregation_mode"] == "Mean"
+    assert st.session_state["x_range_valid"] is True
+    assert st.session_state["y_range_valid"] is True
     assert "component_aliases" not in st.session_state
     assert "time_column_name" not in st.session_state
 
@@ -83,6 +89,8 @@ def test_reset_ui_state_clears_data_selections():
     st.session_state["x_source_column"] = "power"
     st.session_state["x_source_column_select"] = "power"
     st.session_state["x_source_auto_selected"] = True
+    st.session_state["bar_unstacked_enabled"] = True
+    st.session_state["bar_aggregation_mode"] = "Seperate Bars"
 
     reset_ui_state()
 
@@ -96,6 +104,8 @@ def test_reset_ui_state_clears_data_selections():
     assert "x_source_column" not in st.session_state
     assert "x_source_column_select" not in st.session_state
     assert "x_source_auto_selected" not in st.session_state
+    assert "bar_unstacked_enabled" not in st.session_state
+    assert "bar_aggregation_mode" not in st.session_state
 
 
 def test_tab_specs_have_material_labels():
@@ -172,6 +182,8 @@ def test_display_section_uses_blank_ranges_for_auto(monkeypatch):
     assert recorded["expanders"] == ["Display", "Set X Range", "Set Y Range"]
     assert st.session_state["set_x_range"] is False
     assert st.session_state["set_y_range"] is True
+    assert st.session_state["x_range_valid"] is True
+    assert st.session_state["y_range_valid"] is True
 
 
 def test_plotting_app_renders_only_active_tab(monkeypatch):

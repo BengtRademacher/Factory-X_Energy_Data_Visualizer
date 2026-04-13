@@ -55,6 +55,8 @@ def _init_global_state() -> None:
         "y_min": float(PLOT_DEFAULTS.y_min),
         "y_max": float(PLOT_DEFAULTS.y_max),
         "ranges_valid": True,
+        "x_range_valid": True,
+        "y_range_valid": True,
     }
     _set_defaults(defaults)
 
@@ -91,6 +93,8 @@ def _init_bar_plot_state() -> None:
         "bar_width": BAR_DEFAULTS.bar_width,
         "bar_label_rotation": BAR_DEFAULTS.label_rotation,
         "bar_hide_x_labels": BAR_DEFAULTS.hide_x_labels,
+        "bar_unstacked_enabled": False,
+        "bar_aggregation_mode": "Mean",
         "bar_show_compare": False,
         "bar_compare_components": [],
     }
@@ -197,6 +201,8 @@ def reset_ui_state() -> None:
         "secondary_axis_components",
         "bar_selected_components",
         "bar_compare_components",
+        "bar_unstacked_enabled",
+        "bar_aggregation_mode",
         "box_selected_components",
         "donut_components",
         "histogram_components",
@@ -216,6 +222,8 @@ def reset_ui_state() -> None:
         "x_source_column",
         "x_source_column_select",
         "x_source_auto_selected",
+        "x_range_valid",
+        "y_range_valid",
         "data_summary_columns",
     }
 

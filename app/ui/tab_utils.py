@@ -25,9 +25,24 @@ def ensure_has_data(processed, message: str) -> bool:
     return True
 
 
-def ensure_valid_ranges(options: dict, message: str = "Invalid axis ranges.") -> bool:
-    """Show a warning and stop rendering when axis ranges are invalid."""
-    if not options.get("ranges_valid", True):
+def ensure_valid_ranges(
+    options: dict,
+    message: str = "Invalid axis ranges.",
+    *,
+    x_axis_relevant: bool = True,
+    y_axis_relevant: bool = True,
+) -> bool:
+    """Show a warning and stop rendering when relevant axis ranges are invalid."""
+    x_range_valid = bool(options.get("x_range_valid", options.get("ranges_valid", True)))
+    y_range_valid = bool(options.get("y_range_valid", options.get("ranges_valid", True)))
+
+    ranges_valid = True
+    if x_axis_relevant:
+        ranges_valid = ranges_valid and x_range_valid
+    if y_axis_relevant:
+        ranges_valid = ranges_valid and y_range_valid
+
+    if not ranges_valid:
         st.warning(message)
         return False
     return True
@@ -142,4 +157,3 @@ def finalize_matplotlib_figures(
     finally:
         for _, fig in plots:
             plt.close(fig)
-

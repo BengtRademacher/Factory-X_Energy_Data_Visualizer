@@ -415,3 +415,118 @@ def test_scatter_tab_uses_shared_axis_settings_and_numeric_color_scale(monkeypat
     assert recorded["plot_kwargs"]["color_min"] == 1.0
     assert recorded["plot_kwargs"]["color_max"] == 9.0
     assert recorded["plot_kwargs"]["color_tick_step"] == 2.0
+
+
+def test_bar_tab_uses_unstacked_and_aggregation_controls(monkeypatch):
+    recorded = {
+        "checkboxes": [],
+        "segmented_controls": [],
+        "multiselects": [],
+        "sliders": [],
+        "plot_kwargs": None,
+    }
+
+    class DummyColumn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_columns(spec):
+        count = spec if isinstance(spec, int) else len(spec)
+        return [DummyColumn() for _ in range(count)]
+
+    def fake_checkbox(label, key=None, **kwargs):
+        recorded["checkboxes"].append((label, key, kwargs))
+        value = st.session_state.get(key, False)
+        st.session_state[key] = value
+        return value
+
+    def fake_segmented_control(label, options, key=None, **kwargs):
+        recorded["segmented_controls"].append((label, list(options), key, kwargs))
+        value = st.session_state.get(key, options[0])
+        st.session_state[key] = value
+        return value
+
+    def fake_multiselect(label, options, default, key=None, **kwargs):
+        recorded["multiselects"].append((label, list(options), list(default), key, kwargs))
+        value = st.session_state.get(key, default)
+        st.session_state[key] = value
+        return value
+
+    def fake_slider(label, min_value=None, max_value=None, step=None, key=None, **kwargs):
+        recorded["sliders"].append((label, key, kwargs))
+        value = st.session_state.get(key, kwargs.get("value", min_value))
+        st.session_state[key] = value
+        return value
+
+    def fake_plot_bar(*args, **kwargs):
+        from matplotlib.figure import Figure
+
+        recorded["plot_kwargs"] = kwargs
+        return Figure()
+
+    monkeypatch.setattr(bar_plots.st, "columns", fake_columns)
+    monkeypatch.setattr(bar_plots.st, "markdown", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bar_plots.st, "checkbox", fake_checkbox)
+    monkeypatch.setattr(bar_plots.st, "segmented_control", fake_segmented_control)
+    monkeypatch.setattr(bar_plots.st, "multiselect", fake_multiselect)
+    monkeypatch.setattr(bar_plots.st, "slider", fake_slider)
+    monkeypatch.setattr(bar_plots.st, "divider", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bar_plots.st, "info", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bar_plots.st, "warning", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bar_plots.st, "subheader", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bar_plots, "render_component_color_section", lambda *args, **kwargs: {"motor": "#4B5BA9"})
+    monkeypatch.setattr(bar_plots, "plot_bar", fake_plot_bar)
+    monkeypatch.setattr(bar_plots, "plot_bar_evp", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bar_plots, "render_matplotlib_figure", lambda *args, **kwargs: True)
+    monkeypatch.setattr(bar_plots, "finalize_matplotlib_figures", lambda *args, **kwargs: None)
+
+    st.session_state["bar_selected_components"] = ["motor"]
+    st.session_state["bar_unstacked_enabled"] = True
+    st.session_state["bar_aggregation_mode"] = "Seperate Bars"
+    st.session_state["bar_width"] = 0.25
+    st.session_state["bar_label_rotation"] = 0
+    st.session_state["bar_hide_x_labels"] = False
+    st.session_state["bar_show_compare"] = False
+
+    processed = type(
+        "Processed",
+        (),
+        {
+            "has_data": True,
+            "frames_by_file": {"a.csv": pd.DataFrame({"motor": [1.0, 2.0]})},
+            "per_file_numeric_means": pd.DataFrame({"motor": [1.5]}, index=["a.csv"]),
+        },
+    )()
+    options = {
+        "ranges_valid": False,
+        "x_range_valid": False,
+        "y_range_valid": True,
+        "numeric_plot_columns": ["motor"],
+        "line_width": 1.0,
+        "axis_annotation_fontsize": 10,
+        "axis_title_fontsize": 12,
+        "y_unit": "W",
+        "y_tick_step": 5.0,
+        "y_axis_label": "Power",
+        "x_axis_label": "Categories",
+        "x_source_column": "elapsedTime",
+        "plot_width": 100.0,
+        "plot_height": 50.0,
+        "set_y_range": True,
+        "y_min": 0.0,
+        "y_max": 20.0,
+    }
+
+    bar_plots.render(processed, options)
+
+    assert [entry[0] for entry in recorded["checkboxes"]] == ["Unstacked", "Hide X Labels", "Comparison Bars"]
+    assert recorded["segmented_controls"] == [
+        ("Aggregation", ["Mean", "Seperate Bars"], "bar_aggregation_mode", {"selection_mode": "single", "width": "stretch"})
+    ]
+    assert recorded["plot_kwargs"]["stacked"] is False
+    assert recorded["plot_kwargs"]["aggregation_mode"] == "Seperate Bars"
+    assert recorded["plot_kwargs"]["x_source_column"] == "elapsedTime"
+    assert recorded["plot_kwargs"]["ylim"] == (0.0, 20.0)

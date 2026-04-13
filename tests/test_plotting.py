@@ -257,6 +257,156 @@ def test_plot_line_stacked_keeps_secondary_axis_separate() -> None:
     assert tuple(secondary_ax.get_ylim()) == (0.0, 40.0)
 
 
+def test_plot_bar_unstacked_single_file_places_components_without_gaps() -> None:
+    fig = plot_bar(
+        df_by_file={"a.csv": pd.DataFrame({"motor": [999.0], "pump": [999.0]})},
+        components=["motor", "pump"],
+        title="Bar Chart",
+        label_rotation=0,
+        colors={"motor": "#4B5BA9", "pump": "#006DB9"},
+        hide_x_labels=False,
+        figsize=(4, 3),
+        line_width=1.0,
+        axis_fontsize=10,
+        axis_title_fontsize=12,
+        ylim=None,
+        y_unit="W",
+        bar_width=0.4,
+        per_file_means=pd.DataFrame({"motor": [5.0], "pump": [7.0]}, index=["a.csv"]),
+        stacked=False,
+        aggregation_mode="Mean",
+    )
+
+    ax = fig.axes[0]
+    patches = sorted(ax.patches, key=lambda patch: patch.get_x())
+
+    assert np.isclose(patches[0].get_x() + patches[0].get_width(), patches[1].get_x())
+    assert [tick.get_text() for tick in ax.get_xticklabels()] == ["motor", "pump"]
+    assert ax.get_xlim()[0] < patches[0].get_x()
+    assert ax.get_xlim()[1] > patches[-1].get_x() + patches[-1].get_width()
+
+
+def test_plot_bar_unstacked_multiple_files_groups_components_by_file() -> None:
+    fig = plot_bar(
+        df_by_file={
+            "a.csv": pd.DataFrame({"motor": [999.0], "pump": [999.0]}),
+            "b.csv": pd.DataFrame({"motor": [999.0], "pump": [999.0]}),
+        },
+        components=["motor", "pump"],
+        title="Bar Chart",
+        label_rotation=0,
+        colors={"motor": "#4B5BA9", "pump": "#006DB9"},
+        hide_x_labels=False,
+        figsize=(4, 3),
+        line_width=1.0,
+        axis_fontsize=10,
+        axis_title_fontsize=12,
+        ylim=None,
+        y_unit="W",
+        bar_width=0.4,
+        per_file_means=pd.DataFrame({"motor": [5.0, 6.0], "pump": [7.0, 8.0]}, index=["a.csv", "b.csv"]),
+        stacked=False,
+        aggregation_mode="Mean",
+    )
+
+    ax = fig.axes[0]
+    patches = sorted(ax.patches, key=lambda patch: patch.get_x())
+    first_gap = patches[1].get_x() - (patches[0].get_x() + patches[0].get_width())
+    second_gap = patches[2].get_x() - (patches[1].get_x() + patches[1].get_width())
+
+    assert np.isclose(first_gap, 0.0)
+    assert second_gap > 0.0
+    assert [tick.get_text() for tick in ax.get_xticklabels()] == ["a", "b"]
+
+
+def test_plot_bar_separate_bars_uses_row_values_instead_of_mean() -> None:
+    fig = plot_bar(
+        df_by_file={
+            "a.csv": pd.DataFrame(
+                {"motor": [1.0, 3.0]},
+                index=pd.to_timedelta([0, 1], unit="s"),
+            )
+        },
+        components=["motor"],
+        title="Bar Chart",
+        label_rotation=0,
+        colors={"motor": "#4B5BA9"},
+        hide_x_labels=False,
+        figsize=(4, 3),
+        line_width=1.0,
+        axis_fontsize=10,
+        axis_title_fontsize=12,
+        ylim=None,
+        y_unit="W",
+        bar_width=0.4,
+        stacked=False,
+        aggregation_mode="Seperate Bars",
+        x_source_column="elapsedTime",
+    )
+
+    ax = fig.axes[0]
+    heights = [patch.get_height() for patch in sorted(ax.patches, key=lambda patch: patch.get_x())]
+
+    assert heights == [1.0, 3.0]
+    assert [tick.get_text() for tick in ax.get_xticklabels()] == ["0", "1"]
+
+
+def test_plot_bar_applies_manual_ylim() -> None:
+    fig = plot_bar(
+        df_by_file={"a.csv": pd.DataFrame({"motor": [999.0]})},
+        components=["motor"],
+        title="Bar Chart",
+        label_rotation=0,
+        colors={"motor": "#4B5BA9"},
+        hide_x_labels=False,
+        figsize=(4, 3),
+        line_width=1.0,
+        axis_fontsize=10,
+        axis_title_fontsize=12,
+        ylim=(0.0, 50.0),
+        y_unit="W",
+        per_file_means=pd.DataFrame({"motor": [5.0]}, index=["a.csv"]),
+    )
+
+    assert tuple(fig.axes[0].get_ylim()) == (0.0, 50.0)
+
+
+def test_plot_bar_unstacked_mean_bar_width_changes_visible_occupancy() -> None:
+    common_kwargs = {
+        "df_by_file": {"a.csv": pd.DataFrame({"motor": [999.0], "pump": [999.0]})},
+        "components": ["motor", "pump"],
+        "title": "Bar Chart",
+        "label_rotation": 0,
+        "colors": {"motor": "#4B5BA9", "pump": "#006DB9"},
+        "hide_x_labels": False,
+        "figsize": (4, 3),
+        "line_width": 1.0,
+        "axis_fontsize": 10,
+        "axis_title_fontsize": 12,
+        "ylim": None,
+        "y_unit": "W",
+        "per_file_means": pd.DataFrame({"motor": [5.0], "pump": [7.0]}, index=["a.csv"]),
+        "stacked": False,
+        "aggregation_mode": "Mean",
+    }
+
+    fig_small = plot_bar(bar_width=0.2, **common_kwargs)
+    fig_large = plot_bar(bar_width=0.6, **common_kwargs)
+
+    ax_small = fig_small.axes[0]
+    ax_large = fig_large.axes[0]
+    patches_small = sorted(ax_small.patches, key=lambda patch: patch.get_x())
+    patches_large = sorted(ax_large.patches, key=lambda patch: patch.get_x())
+
+    occupied_small = (patches_small[-1].get_x() + patches_small[-1].get_width()) - patches_small[0].get_x()
+    occupied_large = (patches_large[-1].get_x() + patches_large[-1].get_width()) - patches_large[0].get_x()
+    x_range_small = ax_small.get_xlim()[1] - ax_small.get_xlim()[0]
+    x_range_large = ax_large.get_xlim()[1] - ax_large.get_xlim()[0]
+
+    assert occupied_large > occupied_small
+    assert (occupied_large / x_range_large) > (occupied_small / x_range_small)
+
+
 def test_plot_bar_can_use_precomputed_file_means() -> None:
     fig = plot_bar(
         df_by_file={"a.csv": pd.DataFrame({"motor": [999.0]})},

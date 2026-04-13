@@ -19,7 +19,11 @@ def render(processed, options: dict) -> None:
     if not ensure_has_data(processed, "Please upload files to create charts."):
         return
 
-    if not ensure_valid_ranges(options):
+    if not ensure_valid_ranges(
+        options,
+        "Invalid axis ranges. Please ensure Y Min < Y Max.",
+        x_axis_relevant=False,
+    ):
         return
 
     main_col, custom_col = st.columns([4, 1])
@@ -27,6 +31,15 @@ def render(processed, options: dict) -> None:
 
     with custom_col:
         st.markdown("### :material/tune: Options")
+
+        st.checkbox("Unstacked", key="bar_unstacked_enabled")
+        st.segmented_control(
+            "Aggregation",
+            options=["Mean", "Seperate Bars"],
+            key="bar_aggregation_mode",
+            selection_mode="single",
+            width="stretch",
+        )
 
         components = st.multiselect(
             "Components",
@@ -57,6 +70,7 @@ def render(processed, options: dict) -> None:
 
     with main_col:
         plots_to_export = []
+        ylim = (options.get("y_min"), options.get("y_max")) if options.get("set_y_range") else None
 
         if components:
             fig = plot_bar(
@@ -70,13 +84,16 @@ def render(processed, options: dict) -> None:
                 line_width=options.get("line_width", PLOT_DEFAULTS.line_width),
                 axis_fontsize=options.get("axis_annotation_fontsize", PLOT_DEFAULTS.axis_fontsize),
                 axis_title_fontsize=options.get("axis_title_fontsize", PLOT_DEFAULTS.axis_title_fontsize),
-                ylim=None,
+                ylim=ylim,
                 y_unit=options.get("y_unit", PLOT_DEFAULTS.y_unit),
                 bar_width=bar_width,
                 y_tick_step=options.get("y_tick_step"),
                 y_label=options.get("y_axis_label", PLOT_DEFAULTS.y_label),
                 x_label=options.get("x_axis_label", ""),
                 per_file_means=processed.per_file_numeric_means,
+                stacked=not st.session_state.get("bar_unstacked_enabled", False),
+                aggregation_mode=st.session_state.get("bar_aggregation_mode", "Mean"),
+                x_source_column=options.get("x_source_column"),
             )
             if fig:
                 render_matplotlib_figure(fig)
@@ -100,7 +117,7 @@ def render(processed, options: dict) -> None:
                 line_width=options.get("line_width", PLOT_DEFAULTS.line_width),
                 axis_fontsize=options.get("axis_annotation_fontsize", PLOT_DEFAULTS.axis_fontsize),
                 axis_title_fontsize=options.get("axis_title_fontsize", PLOT_DEFAULTS.axis_title_fontsize),
-                ylim=None,
+                ylim=ylim,
                 y_unit=options.get("y_unit", PLOT_DEFAULTS.y_unit),
                 bar_width=bar_width,
                 y_tick_step=options.get("y_tick_step"),

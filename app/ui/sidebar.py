@@ -142,6 +142,7 @@ def _render_display_section(
                 default_max=x_max_default,
             )
             st.session_state["set_x_range"] = x_active
+            st.session_state["x_range_valid"] = x_range_valid
             ranges_valid = ranges_valid and x_range_valid
 
             y_active, y_range_valid = _render_range_expander(
@@ -153,6 +154,7 @@ def _render_display_section(
                 default_max=y_max_default,
             )
             st.session_state["set_y_range"] = y_active
+            st.session_state["y_range_valid"] = y_range_valid
             ranges_valid = ranges_valid and y_range_valid
 
             col1, col2 = st.columns(2)
@@ -332,6 +334,8 @@ def _build_options_dict(
         "y_min": float(st.session_state.get("y_min", 0.0)),
         "y_max": float(st.session_state.get("y_max", y_max_default)),
         "ranges_valid": bool(st.session_state.get("ranges_valid", True)),
+        "x_range_valid": bool(st.session_state.get("x_range_valid", True)),
+        "y_range_valid": bool(st.session_state.get("y_range_valid", True)),
         "export_trigger": export_trigger,
         "export_format": export_format,
         "export_filename": st.session_state.get("export_filename", EXPORT_DEFAULTS.filename),
